@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown 預覽器 | 小工具箱</title>
+<meta name="description" content="免費線上 Markdown 即時預覽工具,支援標題、粗體斜體、清單、連結、程式碼區塊等常用語法。">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .md-preview { padding: 1rem 1.2rem; background: var(--surface); color: var(--text); min-height: 320px; overflow: auto; }
+  .md-preview h1, .md-preview h2, .md-preview h3 { margin: 0.6em 0 0.4em; }
+  .md-preview p { margin: 0.5em 0; }
+  .md-preview code { background: var(--accent-soft); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
+  .md-preview pre { background: var(--code-bg); color: var(--code-text); padding: 0.8em; border-radius: 8px; overflow: auto; }
+  .md-preview pre code { background: none; padding: 0; }
+  .md-preview blockquote { border-left: 3px solid var(--accent); margin: 0.6em 0; padding: 0.2em 0.9em; color: var(--text-muted); }
+  .md-preview ul, .md-preview ol { padding-left: 1.4em; margin: 0.5em 0; }
+  .md-preview a { color: var(--accent); }
+  .md-preview hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / Markdown 預覽器</div>
+  <h1 class="page-title">Markdown 預覽器</h1>
+  <p class="page-desc">左側輸入 Markdown,右側即時預覽渲染結果。支援標題、粗體/斜體、清單、連結、圖片、程式碼、引言、表格。</p>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header"><span>Markdown 輸入</span><div class="actions"><button class="btn" id="clearInput">清空</button></div></div>
+      <textarea id="inputArea" style="min-height:420px;"># 標題範例
+
+這是**粗體**與*斜體*文字,還有 `inline code`。
+
+- 項目一
+- 項目二
+  - 子項目
+
+1. 第一步
+2. 第二步
+
+> 這是一段引言。
+
+[連結範例](https://example.com)
+
+```
+function hello() {
+  console.log("hi");
+}
+```
+
+| 欄位A | 欄位B |
+| --- | --- |
+| 1 | 2 |
+</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span>預覽</span></div>
+      <div class="md-preview" id="previewArea"></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>本工具實作常用 Markdown 子集(標題、粗斜體、清單、連結、圖片、程式碼區塊、引言、表格、分隔線),不支援腳註或 HTML 混排等進階語法。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+const previewArea = document.getElementById('previewArea');
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function inlineFormat(text) {
+  let s = escHtml(text);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" style="max-width:100%;">');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  return s;
+}
+
+function parseMarkdown(md) {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const html = [];
+  let i = 0;
+  let inCode = false, codeBuf = [];
+  let listStack = null; // {type, html}
+  let paraBuf = [];
+
+  function flushPara() {
+    if (paraBuf.length) {
+      html.push('<p>' + inlineFormat(paraBuf.join(' ')) + '</p>');
+      paraBuf = [];
+    }
+  }
+  function closeList() {
+    if (listStack) { html.push(listStack.type === 'ul' ? '</ul>' : '</ol>'); listStack = null; }
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (/^```/.test(line)) {
+      flushPara(); closeList();
+      if (!inCode) { inCode = true; codeBuf = []; }
+      else { html.push('<pre><code>' + escHtml(codeBuf.join('\n')) + '</code></pre>'); inCode = false; }
+      i++; continue;
+    }
+    if (inCode) { codeBuf.push(line); i++; continue; }
+
+    if (!line.trim()) { flushPara(); closeList(); i++; continue; }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { flushPara(); closeList(); const lvl = h[1].length; html.push(`<h${lvl}>${inlineFormat(h[2])}</h${lvl}>`); i++; continue; }
+
+    if (/^(---|\*\*\*|___)\s*$/.test(line)) { flushPara(); closeList(); html.push('<hr>'); i++; continue; }
+
+    const bq = line.match(/^>\s?(.*)$/);
+    if (bq) { flushPara(); closeList(); html.push(`<blockquote>${inlineFormat(bq[1])}</blockquote>`); i++; continue; }
+
+    const ul = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    const ol = line.match(/^(\s*)\d+\.\s+(.*)$/);
+    if (ul || ol) {
+      flushPara();
+      const type = ul ? 'ul' : 'ol';
+      if (!listStack || listStack.type !== type) { closeList(); html.push(type === 'ul' ? '<ul>' : '<ol>'); listStack = { type }; }
+      html.push(`<li>${inlineFormat((ul || ol)[2])}</li>`);
+      i++; continue;
+    }
+
+    if (line.includes('|') && lines[i+1] && /^\s*\|?[\s:-]+\|[\s:|:-]*$/.test(lines[i+1])) {
+      flushPara(); closeList();
+      const headerCells = line.split('|').map(c => c.trim()).filter((c,idx,arr) => !(c==='' && (idx===0||idx===arr.length-1)));
+      const rows = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].includes('|')) {
+        const cells = lines[j].split('|').map(c => c.trim()).filter((c,idx,arr) => !(c==='' && (idx===0||idx===arr.length-1)));
+        rows.push(cells); j++;
+      }
+      let t = '<table><thead><tr>' + headerCells.map(c => `<th>${inlineFormat(c)}</th>`).join('') + '</tr></thead><tbody>';
+      rows.forEach(r => { t += '<tr>' + r.map(c => `<td>${inlineFormat(c)}</td>`).join('') + '</tr>'; });
+      t += '</tbody></table>';
+      html.push(t);
+      i = j; continue;
+    }
+
+    closeList();
+    paraBuf.push(line.trim());
+    i++;
+  }
+  flushPara(); closeList();
+  if (inCode) html.push('<pre><code>' + escHtml(codeBuf.join('\n')) + '</code></pre>');
+  return html.join('\n');
+}
+
+function render() {
+  previewArea.innerHTML = parseMarkdown(inputArea.value);
+}
+
+inputArea.addEventListener('input', render);
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value=''; render(); });
+render();
+</script>
+</body>
+</html>

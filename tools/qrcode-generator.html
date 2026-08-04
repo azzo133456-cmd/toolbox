@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Code 產生器 | 小工具箱</title>
+<meta name="description" content="免費線上 QR Code 產生器,輸入文字或網址即時產生 QR Code 圖片,可下載 PNG。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / QR Code 產生器</div>
+  <h1 class="page-title">QR Code 產生器</h1>
+  <p class="page-desc">輸入文字或網址,即時產生 QR Code,可下載成 PNG 圖片。</p>
+
+  <div class="panel">
+    <div class="panel-header"><span>輸入內容</span><div class="actions"><button class="btn" id="clearInput">清空</button></div></div>
+    <textarea id="inputArea" style="min-height:100px;">https://example.com</textarea>
+  </div>
+
+  <div class="controls-row">
+    <label>大小
+      <select id="sizeSelect">
+        <option value="180">小 (180px)</option>
+        <option value="256" selected>中 (256px)</option>
+        <option value="360">大 (360px)</option>
+      </select>
+    </label>
+    <label>容錯等級
+      <select id="levelSelect">
+        <option value="L">L (低)</option>
+        <option value="M" selected>M (中)</option>
+        <option value="Q">Q (高)</option>
+        <option value="H">H (最高)</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="downloadBtn">下載 PNG</button>
+  </div>
+
+  <div id="qrHolder" style="display:flex;justify-content:center;padding:1.5rem;background:#fff;border-radius:10px;border:1px solid var(--border);"></div>
+  <div class="status-msg" id="statusMsg" style="text-align:center;"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>容錯等級越高,QR Code 越能容忍髒污或遮擋,但圖案也會更密集。文字內容過長時建議調高圖片尺寸以維持可掃描性。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+const sizeSelect = document.getElementById('sizeSelect');
+const levelSelect = document.getElementById('levelSelect');
+const qrHolder = document.getElementById('qrHolder');
+const statusMsg = document.getElementById('statusMsg');
+let qr = null;
+
+function render() {
+  qrHolder.innerHTML = '';
+  const text = inputArea.value.trim();
+  if (!text) { setStatus(statusMsg, ''); return; }
+  if (typeof QRCode === 'undefined') {
+    setStatus(statusMsg, 'QR Code 元件載入失敗,請檢查網路連線', true);
+    return;
+  }
+  try {
+    qr = new QRCode(qrHolder, {
+      text: text,
+      width: Number(sizeSelect.value),
+      height: Number(sizeSelect.value),
+      correctLevel: QRCode.CorrectLevel[levelSelect.value],
+    });
+    setStatus(statusMsg, '已產生 QR Code');
+  } catch (e) {
+    setStatus(statusMsg, '產生失敗:' + e.message, true);
+  }
+}
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const img = qrHolder.querySelector('img');
+  const canvas = qrHolder.querySelector('canvas');
+  const src = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+  if (!src) return;
+  const a = document.createElement('a');
+  a.href = src;
+  a.download = 'qrcode.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+[inputArea, sizeSelect, levelSelect].forEach(el => el.addEventListener('input', render));
+levelSelect.addEventListener('change', render);
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value=''; render(); });
+
+window.addEventListener('load', render);
+</script>
+</body>
+</html>

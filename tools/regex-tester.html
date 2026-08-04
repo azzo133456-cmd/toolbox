@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正規表達式測試工具 Regex Tester | 小工具箱</title>
+<meta name="description" content="免費線上正規表達式(Regex)測試工具,即時顯示比對結果與擷取群組,支援 JavaScript regex 語法。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 正規表達式測試</div>
+  <h1 class="page-title">正規表達式測試工具</h1>
+  <p class="page-desc">輸入正規表達式與測試文字,即時顯示所有比對結果與擷取群組(JavaScript regex 語法)。</p>
+
+  <div class="controls-row">
+    <label style="flex:1;min-width:280px;">Pattern
+      <input type="text" id="patternInput" style="width:100%;" value="\d+">
+    </label>
+    <label>Flags <input type="text" id="flagsInput" value="g" style="width:80px;"></label>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><span>測試文字</span><div class="actions"><button class="btn" id="clearInput">清空</button></div></div>
+    <textarea id="inputArea" style="min-height:180px;">訂單編號 A1234 金額 5000 元,另一筆 B5678 金額 12000 元。</textarea>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel" style="margin-top:1rem;">
+    <div class="panel-header"><span>比對結果</span></div>
+    <pre id="outputArea" style="min-height:160px;"></pre>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>常用旗標:<code>g</code> 全域比對、<code>i</code> 忽略大小寫、<code>m</code> 多行模式、<code>s</code> 讓 <code>.</code> 匹配換行。若 pattern 有語法錯誤會顯示錯誤訊息。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const patternInput = document.getElementById('patternInput');
+const flagsInput = document.getElementById('flagsInput');
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const statusMsg = document.getElementById('statusMsg');
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function run() {
+  const patternStr = patternInput.value;
+  const flags = flagsInput.value.replace(/g/g, '') + 'g'; // force global for matchAll
+  if (!patternStr) { outputArea.textContent = ''; setStatus(statusMsg, ''); return; }
+  let re;
+  try {
+    re = new RegExp(patternStr, flags);
+  } catch (e) {
+    outputArea.textContent = '';
+    setStatus(statusMsg, 'Pattern 錯誤:' + e.message, true);
+    return;
+  }
+  const text = inputArea.value;
+  const matches = [...text.matchAll(re)];
+  if (!matches.length) {
+    outputArea.textContent = '(沒有比對到任何結果)';
+    setStatus(statusMsg, '0 個比對結果');
+    return;
+  }
+  const lines = matches.map((m, i) => {
+    let line = `#${i+1}  位置 ${m.index}  完整比對: "${m[0]}"`;
+    if (m.length > 1) {
+      const groups = m.slice(1).map((g, gi) => `  群組${gi+1}: ${g === undefined ? '(未比對)' : '"' + g + '"'}`).join('\n');
+      line += '\n' + groups;
+    }
+    if (m.groups) {
+      const named = Object.entries(m.groups).map(([k,v]) => `  ${k}: ${v === undefined ? '(未比對)' : '"' + v + '"'}`).join('\n');
+      if (named) line += '\n' + named;
+    }
+    return line;
+  });
+  outputArea.textContent = lines.join('\n\n');
+  setStatus(statusMsg, `${matches.length} 個比對結果`);
+}
+
+[patternInput, flagsInput, inputArea].forEach(el => el.addEventListener('input', run));
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value=''; run(); });
+
+run();
+</script>
+</body>
+</html>

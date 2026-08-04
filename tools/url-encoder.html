@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URL 編碼 / 解碼 | 小工具箱</title>
+<meta name="description" content="免費線上 URL 編碼與解碼工具,支援中文網址參數轉換 encodeURIComponent / decodeURIComponent。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / URL 編碼 / 解碼</div>
+  <h1 class="page-title">URL 編碼 / 解碼</h1>
+  <p class="page-desc">網址與查詢參數的編碼、解碼轉換,支援中文字元。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="encode" checked> 編碼</label>
+    <label><input type="radio" name="mode" value="decode"> 解碼</label>
+    <label><input type="radio" name="scope" value="component" checked> 元件 (encodeURIComponent)</label>
+    <label><input type="radio" name="scope" value="uri"> 完整網址 (encodeURI)</label>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header"><span>輸入</span><div class="actions"><button class="btn" id="clearInput">清空</button></div></div>
+      <textarea id="inputArea" placeholder="輸入文字或網址...">https://example.com/搜尋?q=你好 世界</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span>輸出</span><div class="actions"><button class="btn" id="copyOutput">複製</button></div></div>
+      <pre id="outputArea"></pre>
+    </div>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「元件」模式會把 <code>/ ? & =</code> 等保留字元也編碼,適合處理單一參數值;「完整網址」模式會保留網址結構符號,適合處理整段網址。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const statusMsg = document.getElementById('statusMsg');
+
+function run() {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  const text = inputArea.value;
+  if (!text) { outputArea.textContent = ''; setStatus(statusMsg, ''); return; }
+  try {
+    let out;
+    if (mode === 'encode') out = scope === 'component' ? encodeURIComponent(text) : encodeURI(text);
+    else out = scope === 'component' ? decodeURIComponent(text) : decodeURI(text);
+    outputArea.textContent = out;
+    setStatus(statusMsg, '轉換完成');
+  } catch (e) {
+    outputArea.textContent = '';
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+}
+
+inputArea.addEventListener('input', run);
+document.querySelectorAll('input[name="mode"], input[name="scope"]').forEach(r => r.addEventListener('change', run));
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value=''; run(); });
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+run();
+</script>
+</body>
+</html>
