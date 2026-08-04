@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON 格式化 / 驗證 | 小工具箱</title>
+<meta name="description" content="免費線上 JSON 格式化、壓縮、驗證工具,即時顯示錯誤位置,資料不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / JSON 格式化 / 驗證</div>
+  <h1 class="page-title">JSON 格式化 / 驗證</h1>
+  <p class="page-desc">貼上 JSON 內容,即時美化縮排、壓縮成單行,或檢查格式是否合法。</p>
+
+  <div class="controls-row">
+    <label>縮排
+      <select id="indentSize">
+        <option value="2">2 個空白</option>
+        <option value="4">4 個空白</option>
+        <option value="tab">Tab</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="beautifyBtn">美化</button>
+    <button class="btn" id="minifyBtn">壓縮成一行</button>
+    <button class="btn" id="sortKeysBtn">依 Key 排序</button>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <span>輸入</span>
+        <div class="actions">
+          <button class="btn" id="loadSample">載入範例</button>
+          <button class="btn" id="clearInput">清空</button>
+        </div>
+      </div>
+      <textarea id="inputArea" placeholder='貼上 JSON...'>{"name":"Alice","age":30,"tags":["admin","user"],"active":true}</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span>輸出</span>
+        <div class="actions">
+          <button class="btn" id="copyOutput">複製</button>
+          <button class="btn btn-primary" id="downloadOutput">下載</button>
+        </div>
+      </div>
+      <pre id="outputArea"></pre>
+    </div>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>若 JSON 格式有誤,下方會顯示錯誤訊息。「依 Key 排序」會遞迴排序物件內所有欄位名稱,方便比對兩份 JSON 的差異。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const indentSize = document.getElementById('indentSize');
+const statusMsg = document.getElementById('statusMsg');
+let sortKeys = false;
+
+function getIndent() {
+  const v = indentSize.value;
+  return v === 'tab' ? '\t' : Number(v);
+}
+
+function sortObjectKeys(obj) {
+  if (Array.isArray(obj)) return obj.map(sortObjectKeys);
+  if (obj !== null && typeof obj === 'object') {
+    const sorted = {};
+    Object.keys(obj).sort().forEach(k => { sorted[k] = sortObjectKeys(obj[k]); });
+    return sorted;
+  }
+  return obj;
+}
+
+function run(mode) {
+  const text = inputArea.value;
+  if (!text.trim()) { outputArea.textContent = ''; setStatus(statusMsg, ''); return; }
+  try {
+    let data = JSON.parse(text);
+    if (sortKeys) data = sortObjectKeys(data);
+    let out;
+    if (mode === 'minify') out = JSON.stringify(data);
+    else out = JSON.stringify(data, null, getIndent());
+    outputArea.textContent = out;
+    setStatus(statusMsg, 'JSON 格式正確');
+  } catch (e) {
+    outputArea.textContent = '';
+    setStatus(statusMsg, '格式錯誤:' + e.message, true);
+  }
+}
+
+document.getElementById('beautifyBtn').addEventListener('click', () => run('beautify'));
+document.getElementById('minifyBtn').addEventListener('click', () => run('minify'));
+document.getElementById('sortKeysBtn').addEventListener('click', () => { sortKeys = !sortKeys; document.getElementById('sortKeysBtn').classList.toggle('btn-primary', sortKeys); run('beautify'); });
+inputArea.addEventListener('input', () => run('beautify'));
+indentSize.addEventListener('change', () => run('beautify'));
+
+document.getElementById('loadSample').addEventListener('click', () => {
+  inputArea.value = '{"name":"Alice","age":30,"tags":["admin","user"],"active":true,"address":{"city":"Taipei","zip":"100"}}';
+  run('beautify');
+});
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; run('beautify'); });
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+document.getElementById('downloadOutput').addEventListener('click', () => downloadText('data.json', outputArea.textContent, 'application/json'));
+
+run('beautify');
+</script>
+</body>
+</html>

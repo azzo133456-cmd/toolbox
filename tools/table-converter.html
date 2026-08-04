@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表格格式互轉 - CSV / JSON / TSV / Markdown / HTML | 小工具箱</title>
+<meta name="description" content="免費線上表格格式轉換工具,支援 CSV、TSV(Excel 貼上)、JSON、Markdown、HTML 表格互相轉換,資料不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 表格格式互轉</div>
+  <h1 class="page-title">表格格式互轉</h1>
+  <p class="page-desc">貼上表格資料,即時在 CSV、TSV(可直接貼 Excel/Google Sheets)、JSON、Markdown、HTML 表格之間互相轉換。全部在瀏覽器端運算,不會上傳你的資料。</p>
+
+  <div class="controls-row">
+    <label>輸入格式
+      <select id="inputFormat">
+        <option value="csv">CSV</option>
+        <option value="tsv">TSV(Excel 貼上)</option>
+        <option value="json">JSON</option>
+        <option value="markdown">Markdown</option>
+        <option value="html">HTML 表格</option>
+      </select>
+    </label>
+    <label>輸出格式
+      <select id="outputFormat">
+        <option value="json">JSON</option>
+        <option value="csv">CSV</option>
+        <option value="tsv">TSV(可貼回 Excel)</option>
+        <option value="markdown">Markdown</option>
+        <option value="html">HTML 表格</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="firstRowHeader" checked> 第一列為標題</label>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <span>輸入</span>
+        <div class="actions">
+          <button class="btn" id="loadSample">載入範例</button>
+          <button class="btn" id="clearInput">清空</button>
+        </div>
+      </div>
+      <textarea id="inputArea" placeholder="貼上表格資料...">name,age,city
+Alice,30,Taipei
+Bob,25,Tainan</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span>輸出</span>
+        <div class="actions">
+          <button class="btn" id="copyOutput">複製</button>
+          <button class="btn btn-primary" id="downloadOutput">下載</button>
+        </div>
+      </div>
+      <pre id="outputArea"></pre>
+    </div>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>TSV 格式可以直接從 Excel 或 Google Sheets 選取儲存格複製貼上,輸出的 TSV 也能直接貼回試算表。CSV 支援雙引號包住含逗號或換行的欄位。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const inputFormat = document.getElementById('inputFormat');
+const outputFormat = document.getElementById('outputFormat');
+const firstRowHeader = document.getElementById('firstRowHeader');
+const statusMsg = document.getElementById('statusMsg');
+
+// ---------- Parsers: format -> rows (array of arrays of strings) ----------
+
+function parseDelimited(text, delim) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === delim) { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length === 1 && r[0] === ''));
+}
+
+function parseJSONToRows(text) {
+  const data = JSON.parse(text);
+  const arr = Array.isArray(data) ? data : [data];
+  if (arr.length === 0) return [[]];
+  const keys = [];
+  arr.forEach(obj => {
+    Object.keys(obj).forEach(k => { if (!keys.includes(k)) keys.push(k); });
+  });
+  const rows = [keys];
+  arr.forEach(obj => rows.push(keys.map(k => obj[k] === undefined || obj[k] === null ? '' : String(obj[k]))));
+  return rows;
+}
+
+function parseMarkdownToRows(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length);
+  const rows = [];
+  lines.forEach(line => {
+    if (/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/.test(line)) return; // separator row
+    let l = line;
+    if (l.startsWith('|')) l = l.slice(1);
+    if (l.endsWith('|')) l = l.slice(0, -1);
+    const cells = l.split('|').map(c => c.trim().replace(/\\\|/g, '|'));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+function parseHTMLToRows(text) {
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const table = doc.querySelector('table');
+  if (!table) throw new Error('找不到 <table> 標籤');
+  const rows = [];
+  table.querySelectorAll('tr').forEach(tr => {
+    const cells = Array.from(tr.querySelectorAll('th,td')).map(td => td.textContent.trim());
+    if (cells.length) rows.push(cells);
+  });
+  return rows;
+}
+
+// ---------- Serializers: rows -> format ----------
+
+function escapeDelim(field, delim) {
+  const s = String(field);
+  if (s.includes(delim) || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function rowsToDelimited(rows, delim) {
+  return rows.map(r => r.map(f => escapeDelim(f, delim)).join(delim)).join('\n');
+}
+
+function rowsToJSONText(rows, hasHeader) {
+  if (!rows.length) return '[]';
+  if (!hasHeader) {
+    return JSON.stringify(rows, null, 2);
+  }
+  const header = rows[0];
+  const body = rows.slice(1);
+  const objs = body.map(r => {
+    const o = {};
+    header.forEach((h, i) => { o[h || ('col' + i)] = r[i] !== undefined ? r[i] : ''; });
+    return o;
+  });
+  return JSON.stringify(objs, null, 2);
+}
+
+function rowsToMarkdown(rows, hasHeader) {
+  if (!rows.length) return '';
+  const colCount = Math.max(...rows.map(r => r.length));
+  const pad = r => { const c = r.slice(); while (c.length < colCount) c.push(''); return c; };
+  const esc = s => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const lines = [];
+  const header = hasHeader ? pad(rows[0]) : pad(rows[0]).map((_, i) => 'Col' + (i + 1));
+  const body = hasHeader ? rows.slice(1) : rows;
+  lines.push('| ' + header.map(esc).join(' | ') + ' |');
+  lines.push('| ' + header.map(() => '---').join(' | ') + ' |');
+  body.forEach(r => lines.push('| ' + pad(r).map(esc).join(' | ') + ' |'));
+  return lines.join('\n');
+}
+
+function rowsToHTML(rows, hasHeader) {
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lines = ['<table>'];
+  rows.forEach((r, idx) => {
+    const isHeader = hasHeader && idx === 0;
+    lines.push('  <tr>');
+    r.forEach(cell => {
+      const tag = isHeader ? 'th' : 'td';
+      lines.push(`    <${tag}>${esc(cell)}</${tag}>`);
+    });
+    lines.push('  </tr>');
+  });
+  lines.push('</table>');
+  return lines.join('\n');
+}
+
+// ---------- Orchestration ----------
+
+function parseInput(text, format) {
+  switch (format) {
+    case 'csv': return parseDelimited(text, ',');
+    case 'tsv': return parseDelimited(text, '\t');
+    case 'json': return parseJSONToRows(text);
+    case 'markdown': return parseMarkdownToRows(text);
+    case 'html': return parseHTMLToRows(text);
+  }
+}
+
+function serializeOutput(rows, format, hasHeader) {
+  switch (format) {
+    case 'csv': return rowsToDelimited(rows, ',');
+    case 'tsv': return rowsToDelimited(rows, '\t');
+    case 'json': return rowsToJSONText(rows, hasHeader);
+    case 'markdown': return rowsToMarkdown(rows, hasHeader);
+    case 'html': return rowsToHTML(rows, hasHeader);
+  }
+}
+
+function convert() {
+  const text = inputArea.value;
+  if (!text.trim()) { outputArea.textContent = ''; setStatus(statusMsg, ''); return; }
+  try {
+    const rows = parseInput(text, inputFormat.value);
+    const out = serializeOutput(rows, outputFormat.value, firstRowHeader.checked);
+    outputArea.textContent = out;
+    setStatus(statusMsg, `轉換完成:${rows.length} 列 x ${rows[0] ? rows[0].length : 0} 欄`);
+  } catch (e) {
+    outputArea.textContent = '';
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+}
+
+[inputArea, inputFormat, outputFormat, firstRowHeader].forEach(el => el.addEventListener('input', convert));
+[inputFormat, outputFormat, firstRowHeader].forEach(el => el.addEventListener('change', convert));
+
+document.getElementById('loadSample').addEventListener('click', () => {
+  inputArea.value = 'name,age,city\nAlice,30,Taipei\nBob,25,Tainan\nCarol,28,Kaohsiung';
+  inputFormat.value = 'csv';
+  convert();
+});
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; convert(); });
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+document.getElementById('downloadOutput').addEventListener('click', () => {
+  const ext = { csv: 'csv', tsv: 'tsv', json: 'json', markdown: 'md', html: 'html' }[outputFormat.value];
+  downloadText('table.' + ext, outputArea.textContent);
+});
+
+convert();
+</script>
+</body>
+</html>

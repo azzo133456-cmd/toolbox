@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小工具箱 | 免費線上工具集</title>
+<meta name="description" content="免費線上工具集:表格格式互轉、JSON 格式化、字數統計、Base64、單位換算、時間戳轉換、顏色碼轉換、大小寫轉換,全部在瀏覽器端執行,不上傳你的資料。">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html">
+      <span class="logo-mark">🧰</span>
+      小工具箱
+    </a>
+    <nav class="main-nav">
+      <a href="#converters">格式轉換</a>
+      <a href="#text">文字工具</a>
+      <a href="#numbers">數值/時間</a>
+      <a href="about.html">關於</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>免費線上小工具箱</h1>
+    <p>所有工具都在你的瀏覽器裡執行,資料不會上傳到伺服器。無需註冊,開啟即用。</p>
+  </div>
+
+  <div class="ad-slot">廣告版位(預留,尚未啟用)</div>
+
+  <section class="category-block" id="converters">
+    <h2 class="category-title">格式轉換</h2>
+    <div class="tool-grid">
+      <a class="tool-card" href="tools/table-converter.html">
+        <span class="icon">📊</span>
+        <h3>表格格式互轉</h3>
+        <p>CSV / JSON / Excel / Markdown 表格互相轉換</p>
+      </a>
+      <a class="tool-card" href="tools/json-formatter.html">
+        <span class="icon">🧩</span>
+        <h3>JSON 格式化 / 驗證</h3>
+        <p>美化、壓縮、驗證 JSON 內容是否合法</p>
+      </a>
+      <a class="tool-card" href="tools/base64.html">
+        <span class="icon">🔐</span>
+        <h3>Base64 編碼 / 解碼</h3>
+        <p>文字與 Base64 字串互相轉換</p>
+      </a>
+      <a class="tool-card" href="tools/color-converter.html">
+        <span class="icon">🎨</span>
+        <h3>顏色碼轉換</h3>
+        <p>HEX / RGB / HSL 顏色格式互相轉換</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="category-block" id="text">
+    <h2 class="category-title">文字工具</h2>
+    <div class="tool-grid">
+      <a class="tool-card" href="tools/word-counter.html">
+        <span class="icon">📝</span>
+        <h3>字數統計</h3>
+        <p>統計字元數、字數、行數、去除空白後字數</p>
+      </a>
+      <a class="tool-card" href="tools/case-converter.html">
+        <span class="icon">🔤</span>
+        <h3>大小寫 / 命名格式轉換</h3>
+        <p>UPPERCASE、lowercase、camelCase、snake_case 等</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="category-block" id="numbers">
+    <h2 class="category-title">數值 / 時間</h2>
+    <div class="tool-grid">
+      <a class="tool-card" href="tools/unit-converter.html">
+        <span class="icon">📏</span>
+        <h3>單位換算</h3>
+        <p>長度、重量、溫度單位互相換算</p>
+      </a>
+      <a class="tool-card" href="tools/timestamp-converter.html">
+        <span class="icon">⏱️</span>
+        <h3>時間戳轉換</h3>
+        <p>Unix 時間戳與日期時間互相轉換</p>
+      </a>
+    </div>
+  </section>
+
+  <div class="info-box">
+    <h4>關於這個網站</h4>
+    <p>這是一個持續擴充的免費線上工具集,所有運算都在你的裝置本機完成,不會把資料傳到任何伺服器。如果這個網站對你有幫助,歡迎之後回來看看新工具。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+  <p><a href="about.html">關於本站</a></p>
+</footer>
+
+<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

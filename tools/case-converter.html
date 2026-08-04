@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大小寫 / 命名格式轉換 | 小工具箱</title>
+<meta name="description" content="免費線上英文大小寫與命名格式轉換工具,支援 UPPERCASE、lowercase、Title Case、camelCase、snake_case、kebab-case、PascalCase。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 大小寫 / 命名格式轉換</div>
+  <h1 class="page-title">大小寫 / 命名格式轉換</h1>
+  <p class="page-desc">輸入文字,一鍵轉換成常用的大小寫或程式命名格式。</p>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>輸入文字</span>
+      <div class="actions"><button class="btn" id="clearInput">清空</button></div>
+    </div>
+    <textarea id="inputArea" style="min-height:140px;">hello world example</textarea>
+  </div>
+
+  <div class="case-btn-grid">
+    <button class="btn" data-fn="upper">UPPERCASE</button>
+    <button class="btn" data-fn="lower">lowercase</button>
+    <button class="btn" data-fn="title">Title Case</button>
+    <button class="btn" data-fn="sentence">Sentence case</button>
+    <button class="btn" data-fn="camel">camelCase</button>
+    <button class="btn" data-fn="pascal">PascalCase</button>
+    <button class="btn" data-fn="snake">snake_case</button>
+    <button class="btn" data-fn="kebab">kebab-case</button>
+    <button class="btn" data-fn="constant">CONSTANT_CASE</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>輸出結果</span>
+      <div class="actions"><button class="btn" id="copyOutput">複製</button></div>
+    </div>
+    <pre id="outputArea" style="min-height:140px;"></pre>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>輸入一般文字或已有分隔符號的字串(空格、底線、連字號皆可辨識),點擊上方按鈕即可轉換成對應格式。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+
+function toWords(str) {
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_\-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => w.toLowerCase());
+}
+
+const converters = {
+  upper: s => s.toUpperCase(),
+  lower: s => s.toLowerCase(),
+  title: s => toWords(s).map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+  sentence: s => { const w = toWords(s).join(' '); return w ? w[0].toUpperCase() + w.slice(1) : ''; },
+  camel: s => toWords(s).map((w,i) => i === 0 ? w : w[0].toUpperCase() + w.slice(1)).join(''),
+  pascal: s => toWords(s).map(w => w[0].toUpperCase() + w.slice(1)).join(''),
+  snake: s => toWords(s).join('_'),
+  kebab: s => toWords(s).join('-'),
+  constant: s => toWords(s).join('_').toUpperCase(),
+};
+
+let lastFn = 'title';
+function run(fn) {
+  lastFn = fn;
+  outputArea.textContent = converters[fn](inputArea.value);
+}
+
+document.querySelectorAll('.case-btn-grid .btn').forEach(btn => {
+  btn.addEventListener('click', () => run(btn.dataset.fn));
+});
+inputArea.addEventListener('input', () => run(lastFn));
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value=''; run(lastFn); });
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+
+run('title');
+</script>
+</body>
+</html>

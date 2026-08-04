@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>字數統計工具 | 小工具箱</title>
+<meta name="description" content="免費線上字數統計工具,即時統計字元數、中文字數、英文單字數、行數、段落數。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 字數統計</div>
+  <h1 class="page-title">字數統計</h1>
+  <p class="page-desc">貼上文字,即時統計字元數、中文字數、英文單字數、行數與段落數。</p>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num" id="statChars">0</div><div class="label">總字元數</div></div>
+    <div class="stat-card"><div class="num" id="statCharsNoSpace">0</div><div class="label">不含空白</div></div>
+    <div class="stat-card"><div class="num" id="statCJK">0</div><div class="label">中日韓文字</div></div>
+    <div class="stat-card"><div class="num" id="statWords">0</div><div class="label">英文單字數</div></div>
+    <div class="stat-card"><div class="num" id="statLines">0</div><div class="label">行數</div></div>
+    <div class="stat-card"><div class="num" id="statParagraphs">0</div><div class="label">段落數</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>輸入文字</span>
+      <div class="actions">
+        <button class="btn" id="clearInput">清空</button>
+      </div>
+    </div>
+    <textarea id="inputArea" placeholder="在這裡貼上或輸入文字..." style="min-height:360px;"></textarea>
+  </div>
+
+  <div class="info-box">
+    <h4>統計說明</h4>
+    <p>「中日韓文字」統計 Unicode CJK 統一表意文字範圍內的字元;「英文單字數」以空白分隔的英數字詞為單位計算;段落數以連續兩個換行判斷分段。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+
+function update() {
+  const text = inputArea.value;
+  const chars = Array.from(text).length;
+  const charsNoSpace = Array.from(text.replace(/\s/g, '')).length;
+  const cjkMatches = text.match(/[一-鿿㐀-䶿豈-﫿]/g) || [];
+  const wordMatches = text.replace(/[一-鿿㐀-䶿豈-﫿]/g, ' ').match(/[A-Za-z0-9'-]+/g) || [];
+  const lines = text.length ? text.split(/\r\n|\r|\n/).length : 0;
+  const paragraphs = text.trim().length ? text.trim().split(/\n\s*\n/).filter(p => p.trim().length).length : 0;
+
+  document.getElementById('statChars').textContent = chars;
+  document.getElementById('statCharsNoSpace').textContent = charsNoSpace;
+  document.getElementById('statCJK').textContent = cjkMatches.length;
+  document.getElementById('statWords').textContent = wordMatches.length;
+  document.getElementById('statLines').textContent = lines;
+  document.getElementById('statParagraphs').textContent = paragraphs;
+}
+
+inputArea.addEventListener('input', update);
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; update(); });
+update();
+</script>
+</body>
+</html>

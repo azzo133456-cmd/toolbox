@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>時間戳轉換 Unix Timestamp | 小工具箱</title>
+<meta name="description" content="免費線上 Unix 時間戳與日期時間互相轉換工具,支援秒/毫秒與多時區。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 時間戳轉換</div>
+  <h1 class="page-title">時間戳轉換</h1>
+  <p class="page-desc">Unix 時間戳與日期時間互相轉換,支援秒與毫秒。</p>
+
+  <div class="stat-grid" style="grid-template-columns:1fr;">
+    <div class="stat-card" style="text-align:left;padding:1.1rem;">
+      <div class="label">目前時間戳</div>
+      <div class="num" id="nowStamp" style="font-size:1.6rem;"></div>
+      <button class="btn" id="useNow" style="margin-top:0.5rem;">使用目前時間</button>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header"><span>時間戳 → 日期</span></div>
+      <div style="padding:1rem;">
+        <div class="controls-row" style="margin:0 0 0.75rem;">
+          <input type="text" id="stampInput" placeholder="輸入時間戳,例如 1700000000">
+          <select id="stampUnit">
+            <option value="s">秒</option>
+            <option value="ms">毫秒</option>
+          </select>
+        </div>
+        <div id="stampResult" style="font-family:monospace;font-size:0.9rem;white-space:pre-line;"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span>日期 → 時間戳</span></div>
+      <div style="padding:1rem;">
+        <input type="datetime-local" id="dateInput" step="1" style="width:100%;margin-bottom:0.75rem;">
+        <div id="dateResult" style="font-family:monospace;font-size:0.9rem;white-space:pre-line;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「日期 → 時間戳」使用瀏覽器本機時區解讀輸入的日期時間。若時間戳為 13 位數,通常是毫秒;10 位數則是秒。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const nowStamp = document.getElementById('nowStamp');
+const stampInput = document.getElementById('stampInput');
+const stampUnit = document.getElementById('stampUnit');
+const stampResult = document.getElementById('stampResult');
+const dateInput = document.getElementById('dateInput');
+const dateResult = document.getElementById('dateResult');
+
+function tickNow() { nowStamp.textContent = Math.floor(Date.now()/1000); }
+setInterval(tickNow, 1000);
+tickNow();
+
+document.getElementById('useNow').addEventListener('click', () => {
+  stampInput.value = Math.floor(Date.now()/1000);
+  stampUnit.value = 's';
+  convertStamp();
+});
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function convertStamp() {
+  const raw = stampInput.value.trim();
+  if (!raw) { stampResult.textContent = ''; return; }
+  const num = Number(raw);
+  if (isNaN(num)) { stampResult.textContent = '請輸入數字'; return; }
+  const ms = stampUnit.value === 's' ? num * 1000 : num;
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) { stampResult.textContent = '無效的時間戳'; return; }
+  stampResult.textContent =
+    `本機時間: ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}\n` +
+    `UTC 時間: ${d.toISOString()}\n` +
+    `ISO 8601: ${d.toISOString()}`;
+}
+
+function convertDate() {
+  const val = dateInput.value;
+  if (!val) { dateResult.textContent = ''; return; }
+  const d = new Date(val);
+  if (isNaN(d.getTime())) { dateResult.textContent = '無效的日期'; return; }
+  const seconds = Math.floor(d.getTime()/1000);
+  dateResult.textContent = `秒: ${seconds}\n毫秒: ${d.getTime()}\nISO 8601: ${d.toISOString()}`;
+}
+
+stampInput.addEventListener('input', convertStamp);
+stampUnit.addEventListener('change', convertStamp);
+dateInput.addEventListener('input', convertDate);
+
+stampInput.value = Math.floor(Date.now()/1000);
+convertStamp();
+</script>
+</body>
+</html>

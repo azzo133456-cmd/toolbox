@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>單位換算 - 長度 / 重量 / 溫度 | 小工具箱</title>
+<meta name="description" content="免費線上單位換算工具,支援長度(公尺/英尺/英吋等)、重量(公斤/磅等)、溫度(攝氏/華氏/克氏)換算。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 單位換算</div>
+  <h1 class="page-title">單位換算</h1>
+  <p class="page-desc">長度、重量、溫度單位互相換算,輸入數字即時顯示結果。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="category" value="length" checked> 長度</label>
+    <label><input type="radio" name="category" value="weight"> 重量</label>
+    <label><input type="radio" name="category" value="temperature"> 溫度</label>
+  </div>
+
+  <div class="converter-simple">
+    <div class="panel">
+      <div class="panel-header"><span>輸入</span></div>
+      <div style="padding:1rem;display:flex;gap:0.6rem;">
+        <input type="number" id="fromValue" value="1" style="flex:1;">
+        <select id="fromUnit" style="flex:1;"></select>
+      </div>
+    </div>
+    <button class="btn swap-btn" id="swapBtn" title="交換">⇄</button>
+    <div class="panel">
+      <div class="panel-header"><span>結果</span></div>
+      <div style="padding:1rem;display:flex;gap:0.6rem;">
+        <input type="text" id="toValue" readonly style="flex:1;">
+        <select id="toUnit" style="flex:1;"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>溫度換算使用標準公式(攝氏/華氏/克氏互轉);長度與重量以公制基準單位換算,數值僅供參考。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const units = {
+  length: {
+    base: 'm',
+    options: { mm: '毫米 (mm)', cm: '公分 (cm)', m: '公尺 (m)', km: '公里 (km)', inch: '英吋 (in)', ft: '英尺 (ft)', yard: '碼 (yd)', mile: '英里 (mi)' },
+    toBase: { mm: v => v/1000, cm: v => v/100, m: v => v, km: v => v*1000, inch: v => v*0.0254, ft: v => v*0.3048, yard: v => v*0.9144, mile: v => v*1609.344 },
+    fromBase: { mm: v => v*1000, cm: v => v*100, m: v => v, km: v => v/1000, inch: v => v/0.0254, ft: v => v/0.3048, yard: v => v/0.9144, mile: v => v/1609.344 },
+  },
+  weight: {
+    base: 'kg',
+    options: { mg: '毫克 (mg)', g: '公克 (g)', kg: '公斤 (kg)', tonne: '公噸 (t)', oz: '盎司 (oz)', lb: '磅 (lb)' },
+    toBase: { mg: v => v/1e6, g: v => v/1000, kg: v => v, tonne: v => v*1000, oz: v => v*0.028349523125, lb: v => v*0.45359237 },
+    fromBase: { mg: v => v*1e6, g: v => v*1000, kg: v => v, tonne: v => v/1000, oz: v => v/0.028349523125, lb: v => v/0.45359237 },
+  },
+  temperature: {
+    base: 'c',
+    options: { c: '攝氏 (°C)', f: '華氏 (°F)', k: '克氏 (K)' },
+    toBase: { c: v => v, f: v => (v-32)*5/9, k: v => v-273.15 },
+    fromBase: { c: v => v, f: v => v*9/5+32, k: v => v+273.15 },
+  },
+};
+
+const fromValue = document.getElementById('fromValue');
+const toValue = document.getElementById('toValue');
+const fromUnit = document.getElementById('fromUnit');
+const toUnit = document.getElementById('toUnit');
+
+function currentCategory() { return document.querySelector('input[name="category"]:checked').value; }
+
+function populateUnits() {
+  const cat = units[currentCategory()];
+  const keys = Object.keys(cat.options);
+  [fromUnit, toUnit].forEach(sel => {
+    sel.innerHTML = keys.map(k => `<option value="${k}">${cat.options[k]}</option>`).join('');
+  });
+  fromUnit.value = keys[0];
+  toUnit.value = keys[1] || keys[0];
+}
+
+function convert() {
+  const cat = units[currentCategory()];
+  const v = parseFloat(fromValue.value);
+  if (isNaN(v)) { toValue.value = ''; return; }
+  const base = cat.toBase[fromUnit.value](v);
+  const result = cat.fromBase[toUnit.value](base);
+  toValue.value = Number(result.toFixed(6)).toString();
+}
+
+document.querySelectorAll('input[name="category"]').forEach(r => r.addEventListener('change', () => { populateUnits(); convert(); }));
+[fromValue, fromUnit, toUnit].forEach(el => el.addEventListener('input', convert));
+document.getElementById('swapBtn').addEventListener('click', () => {
+  const tmp = fromUnit.value; fromUnit.value = toUnit.value; toUnit.value = tmp;
+  fromValue.value = toValue.value || fromValue.value;
+  convert();
+});
+
+populateUnits();
+convert();
+</script>
+</body>
+</html>

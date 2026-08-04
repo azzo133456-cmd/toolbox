@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Base64 編碼 / 解碼 | 小工具箱</title>
+<meta name="description" content="免費線上 Base64 編碼與解碼工具,支援中文與 UTF-8 文字,資料不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / Base64 編碼 / 解碼</div>
+  <h1 class="page-title">Base64 編碼 / 解碼</h1>
+  <p class="page-desc">文字與 Base64 字串互相轉換,完整支援中文等 UTF-8 字元。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="encode" checked> 編碼(文字 → Base64)</label>
+    <label><input type="radio" name="mode" value="decode"> 解碼(Base64 → 文字)</label>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <span id="inputLabel">輸入文字</span>
+        <div class="actions"><button class="btn" id="clearInput">清空</button></div>
+      </div>
+      <textarea id="inputArea" placeholder="輸入內容...">Hello, 世界!</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span id="outputLabel">輸出 Base64</span>
+        <div class="actions"><button class="btn" id="copyOutput">複製</button></div>
+      </div>
+      <pre id="outputArea"></pre>
+    </div>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>解碼時若輸入不是合法的 Base64 字串會顯示錯誤訊息。編碼採用標準 Base64(非 URL-safe)。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const statusMsg = document.getElementById('statusMsg');
+const inputLabel = document.getElementById('inputLabel');
+const outputLabel = document.getElementById('outputLabel');
+
+function getMode() { return document.querySelector('input[name="mode"]:checked').value; }
+
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+function base64ToUtf8(b64) {
+  const binary = atob(b64);
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function run() {
+  const mode = getMode();
+  inputLabel.textContent = mode === 'encode' ? '輸入文字' : '輸入 Base64';
+  outputLabel.textContent = mode === 'encode' ? '輸出 Base64' : '輸出文字';
+  const text = inputArea.value;
+  if (!text) { outputArea.textContent = ''; setStatus(statusMsg, ''); return; }
+  try {
+    const out = mode === 'encode' ? utf8ToBase64(text) : base64ToUtf8(text.trim());
+    outputArea.textContent = out;
+    setStatus(statusMsg, '轉換完成');
+  } catch (e) {
+    outputArea.textContent = '';
+    setStatus(statusMsg, '轉換失敗:輸入不是合法的 Base64 字串', true);
+  }
+}
+
+inputArea.addEventListener('input', run);
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', run));
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; run(); });
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+
+run();
+</script>
+</body>
+</html>
