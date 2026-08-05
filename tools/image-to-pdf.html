@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片轉 PDF | 小工具箱</title>
+<meta name="description" content="免費線上圖片轉 PDF 工具,把多張圖片依序組成一份 PDF 檔案,可調整順序與頁面邊距,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  .file-row { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.3rem; border-bottom:1px solid var(--border); font-size:0.85rem; }
+  .thumb { width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片轉 PDF</div>
+  <h1 class="page-title">圖片轉 PDF</h1>
+  <p class="page-desc">上傳多張圖片,依順序組成一份 PDF 檔案下載。全部在瀏覽器端處理,圖片不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="addFilesBtn">➕ 新增圖片</button>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+    <button class="btn" id="clearAllBtn">清空全部</button>
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div class="controls-row">
+    <label>頁面大小
+      <select id="pageSizeSelect">
+        <option value="fit" selected>依圖片尺寸(每頁大小依該圖片)</option>
+        <option value="a4">A4(圖片置中縮放)</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="convertBtn" disabled>轉換並下載 PDF</button>
+  </div>
+
+  <div id="fileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
+    <div class="panel-header"><span>頁面順序(由上到下)</span></div>
+    <div id="fileList" style="padding:0.4rem;"></div>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「依圖片尺寸」會讓每一頁的大小等於該張圖片的原始尺寸(1:1 還原,適合掃描件);「A4」則會把每張圖片等比縮放後置中放在 A4 頁面上,適合列印。用「↑ ↓」調整頁面順序,「✕」移除單張圖片。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const addFilesBtn = document.getElementById('addFilesBtn');
+const fileInput = document.getElementById('fileInput');
+const fileListWrap = document.getElementById('fileListWrap');
+const fileList = document.getElementById('fileList');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const convertBtn = document.getElementById('convertBtn');
+const statusMsg = document.getElementById('statusMsg');
+const pageSizeSelect = document.getElementById('pageSizeSelect');
+
+let files = []; // {name, buffer, dataUrl, type, w, h}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = dataUrl;
+  });
+}
+
+function renderList() {
+  fileListWrap.style.display = files.length ? 'block' : 'none';
+  convertBtn.disabled = files.length === 0;
+  fileList.innerHTML = '';
+  files.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `
+      <img class="thumb" src="${f.dataUrl}">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${f.name}(${f.w}×${f.h}px)</span>
+      <button class="btn" data-act="up">↑</button>
+      <button class="btn" data-act="down">↓</button>
+      <button class="btn" data-act="remove">✕</button>
+    `;
+    row.querySelector('[data-act="up"]').addEventListener('click', () => { if (idx > 0) { [files[idx - 1], files[idx]] = [files[idx], files[idx - 1]]; renderList(); } });
+    row.querySelector('[data-act="down"]').addEventListener('click', () => { if (idx < files.length - 1) { [files[idx + 1], files[idx]] = [files[idx], files[idx + 1]]; renderList(); } });
+    row.querySelector('[data-act="remove"]').addEventListener('click', () => { files.splice(idx, 1); renderList(); });
+    fileList.appendChild(row);
+  });
+}
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+addFilesBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  for (const f of fileInput.files) {
+    const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+    const img = await loadImage(dataUrl);
+    const buffer = await f.arrayBuffer();
+    files.push({ name: f.name, buffer, dataUrl, type: f.type, w: img.naturalWidth, h: img.naturalHeight });
+  }
+  fileInput.value = '';
+  renderList();
+});
+
+clearAllBtn.addEventListener('click', () => { files = []; renderList(); setStatus(statusMsg, ''); });
+
+convertBtn.addEventListener('click', async () => {
+  if (!files.length) return;
+  convertBtn.disabled = true;
+  setStatus(statusMsg, '轉換中...');
+  try {
+    const { PDFDocument } = PDFLib;
+    const pdfDoc = await PDFDocument.create();
+    const A4 = [595.28, 841.89];
+    for (const f of files) {
+      const isPng = f.type.includes('png');
+      const embedded = isPng ? await pdfDoc.embedPng(f.buffer) : await pdfDoc.embedJpg(f.buffer);
+      if (pageSizeSelect.value === 'fit') {
+        const page = pdfDoc.addPage([f.w, f.h]);
+        page.drawImage(embedded, { x: 0, y: 0, width: f.w, height: f.h });
+      } else {
+        const page = pdfDoc.addPage(A4);
+        const margin = 40;
+        const maxW = A4[0] - margin * 2, maxH = A4[1] - margin * 2;
+        const scale = Math.min(maxW / f.w, maxH / f.h);
+        const w = f.w * scale, h = f.h * scale;
+        const x = (A4[0] - w) / 2, y = (A4[1] - h) / 2;
+        page.drawImage(embedded, { x, y, width: w, height: h });
+      }
+    }
+    const bytes = await pdfDoc.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'images.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    setStatus(statusMsg, `完成:已產生 ${files.length} 頁 PDF`);
+  } catch (e) {
+    setStatus(statusMsg, '轉換失敗:' + e.message + '(僅支援 PNG / JPG 格式圖片)', true);
+  }
+  convertBtn.disabled = false;
+});
+</script>
+</body>
+</html>

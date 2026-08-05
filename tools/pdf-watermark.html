@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 加浮水印 | 小工具箱</title>
+<meta name="description" content="免費線上 PDF 加浮水印工具,為 PDF 每一頁加上文字浮水印,可調整位置、透明度、角度與平舖,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / PDF 加浮水印</div>
+  <h1 class="page-title">PDF 加浮水印</h1>
+  <p class="page-desc">上傳 PDF,為每一頁加上文字浮水印(例如「機密」「草稿」「僅供內部使用」),可調整位置、透明度、角度與平舖。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
+    <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把 PDF 檔案拖曳到這裡</span>
+  </div>
+
+  <div class="controls-row">
+    <label>浮水印文字 <input type="text" id="wmText" value="機密" style="width:140px;"></label>
+    <label>字型大小 <input type="number" id="wmFontSize" value="48" min="8" max="200" style="width:70px;"></label>
+    <label>顏色 <input type="color" id="wmColor" value="#ff0000"></label>
+    <label>透明度 <input type="range" id="wmOpacity" min="5" max="100" value="30"><span id="wmOpacityVal">30%</span></label>
+    <label>旋轉角度 <input type="number" id="wmRotate" value="45" min="-90" max="90" style="width:70px;"></label>
+  </div>
+  <div class="controls-row">
+    <label><input type="checkbox" id="tileChk" checked> 平舖滿版(未勾選則每頁置中一個)</label>
+    <button class="btn btn-primary" id="applyBtn" disabled>套用浮水印並下載</button>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「平舖滿版」會在每一頁重複鋪滿浮水印文字,防止裁切後失效,適合防盜用;取消勾選則每頁中央只放一個浮水印。轉換後會產生新的 PDF 檔案下載,原始檔案不會被修改或上傳。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const applyBtn = document.getElementById('applyBtn');
+const wmText = document.getElementById('wmText');
+const wmFontSize = document.getElementById('wmFontSize');
+const wmColor = document.getElementById('wmColor');
+const wmOpacity = document.getElementById('wmOpacity');
+const wmOpacityVal = document.getElementById('wmOpacityVal');
+const wmRotate = document.getElementById('wmRotate');
+const tileChk = document.getElementById('tileChk');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+wmOpacity.addEventListener('input', () => { wmOpacityVal.textContent = wmOpacity.value + '%'; });
+
+let currentBuffer = null;
+let currentName = 'document';
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentBuffer = await f.arrayBuffer();
+  currentName = f.name.replace(/\.pdf$/i, '');
+  fileInfo.textContent = `已載入:${f.name}`;
+  applyBtn.disabled = false;
+  setStatus(statusMsg, '');
+});
+
+// Render watermark text to a PNG via canvas (supports CJK through system fonts,
+// unlike pdf-lib's StandardFonts which are WinAnsi-only) and embed it as an image.
+function buildWatermarkPng(text, fontSize, colorHex) {
+  const measureCanvas = document.createElement('canvas');
+  const mctx = measureCanvas.getContext('2d');
+  mctx.font = `bold ${fontSize}px sans-serif`;
+  const tw = Math.ceil(mctx.measureText(text).width);
+  const th = Math.ceil(fontSize * 1.4);
+  const canvas = document.createElement('canvas');
+  canvas.width = tw; canvas.height = th;
+  const ctx = canvas.getContext('2d');
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = colorHex;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, th / 2);
+  return { dataUrl: canvas.toDataURL('image/png'), w: tw, h: th };
+}
+
+applyBtn.addEventListener('click', async () => {
+  if (!currentBuffer) return;
+  applyBtn.disabled = true;
+  setStatus(statusMsg, '處理中...');
+  try {
+    const { PDFDocument, degrees } = PDFLib;
+    const pdfDoc = await PDFDocument.load(currentBuffer);
+    const text = wmText.value || '';
+    const fontSize = Number(wmFontSize.value);
+    const opacity = Number(wmOpacity.value) / 100;
+    const rotateDeg = Number(wmRotate.value);
+    const tiled = tileChk.checked;
+
+    const { dataUrl, w: tw, h: th } = buildWatermarkPng(text, fontSize, wmColor.value);
+    const pngBytes = await (await fetch(dataUrl)).arrayBuffer();
+    const embeddedImg = await pdfDoc.embedPng(pngBytes);
+
+    pdfDoc.getPages().forEach((page) => {
+      const { width, height } = page.getSize();
+      if (tiled) {
+        const stepX = tw + fontSize * 2;
+        const stepY = fontSize * 4;
+        for (let y = -stepY; y < height + stepY; y += stepY) {
+          for (let x = -stepX; x < width + stepX; x += stepX) {
+            page.drawImage(embeddedImg, { x, y, width: tw, height: th, opacity, rotate: degrees(rotateDeg) });
+          }
+        }
+      } else {
+        page.drawImage(embeddedImg, {
+          x: width / 2 - tw / 2,
+          y: height / 2 - th / 2,
+          width: tw, height: th,
+          opacity, rotate: degrees(rotateDeg),
+        });
+      }
+    });
+
+    const bytes = await pdfDoc.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${currentName}-watermark.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    setStatus(statusMsg, `完成:已為 ${pdfDoc.getPageCount()} 頁加上浮水印`);
+  } catch (e) {
+    setStatus(statusMsg, '處理失敗:' + e.message, true);
+  }
+  applyBtn.disabled = false;
+});
+</script>
+</body>
+</html>

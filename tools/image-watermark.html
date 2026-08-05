@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片浮水印 | 小工具箱</title>
+<meta name="description" content="免費線上圖片浮水印工具,支援文字或圖片浮水印,可調整位置、透明度、角度,支援批次處理多張圖片。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  #previewCanvas { max-width: 100%; max-height: 420px; display: block; margin: 0 auto; border-radius: 8px; }
+  .canvas-panel { text-align: center; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .file-row { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.3rem; border-bottom:1px solid var(--border); font-size:0.85rem; }
+  .pos-grid { display:grid; grid-template-columns:repeat(3,32px); grid-template-rows:repeat(3,32px); gap:4px; }
+  .pos-grid button { border:1px solid var(--border); background:var(--surface); border-radius:4px; cursor:pointer; padding:0; }
+  .pos-grid button.active { background:var(--accent); border-color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片浮水印</div>
+  <h1 class="page-title">圖片浮水印</h1>
+  <p class="page-desc">為圖片加上文字或圖片浮水印,可設定位置、透明度、角度、平舖。支援一次處理多張圖片,全部在瀏覽器端完成,圖片不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片(可多選)</button>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div class="controls-row">
+    <label><input type="radio" name="wmType" value="text" checked> 文字浮水印</label>
+    <label><input type="radio" name="wmType" value="image"> 圖片浮水印</label>
+  </div>
+
+  <div id="textOpts" class="controls-row">
+    <label>文字 <input type="text" id="wmText" value="© 我的浮水印" style="width:160px;"></label>
+    <label>字型大小 <input type="number" id="wmFontSize" value="36" min="8" max="300" style="width:70px;"></label>
+    <label>顏色 <input type="color" id="wmColor" value="#ffffff"></label>
+  </div>
+
+  <div id="imageOpts" class="controls-row" style="display:none;">
+    <button class="btn" id="chooseWmImgBtn">選擇浮水印圖片</button>
+    <input type="file" id="wmImgInput" accept="image/*" style="display:none;">
+    <span id="wmImgInfo" style="font-size:0.82rem;color:var(--text-muted);"></span>
+    <label>縮放 <input type="range" id="wmImgScale" min="5" max="100" value="25"><span id="wmImgScaleVal">25%</span></label>
+  </div>
+
+  <div class="controls-row">
+    <label>位置
+      <span class="pos-grid" id="posGrid">
+        <button data-pos="top-left"></button><button data-pos="top-center"></button><button data-pos="top-right"></button>
+        <button data-pos="center-left"></button><button data-pos="center" class="active"></button><button data-pos="center-right"></button>
+        <button data-pos="bottom-left"></button><button data-pos="bottom-center"></button><button data-pos="bottom-right"></button>
+      </span>
+    </label>
+    <label><input type="checkbox" id="tileChk"> 平舖滿版</label>
+    <label>透明度 <input type="range" id="wmOpacity" min="5" max="100" value="50"><span id="wmOpacityVal">50%</span></label>
+    <label>旋轉角度 <input type="range" id="wmRotate" min="-90" max="90" value="0"><span id="wmRotateVal">0°</span></label>
+  </div>
+
+  <div class="controls-row">
+    <button class="btn btn-primary" id="applyBtn" disabled>套用並下載</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="canvas-panel" id="previewWrap" style="display:none;">
+    <div style="margin-bottom:0.5rem;font-size:0.8rem;color:var(--text-muted);">預覽(第一張圖片)</div>
+    <canvas id="previewCanvas"></canvas>
+  </div>
+
+  <div id="fileListWrap" class="panel" style="display:none;margin-top:1rem;">
+    <div class="panel-header"><span>已選圖片</span></div>
+    <div id="fileList" style="padding:0.4rem;"></div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>選擇「位置」九宮格決定浮水印基準點,或勾選「平舖滿版」讓浮水印重複鋪滿整張圖片(適合防盜用)。多張圖片會套用相同設定,單張下載為圖片檔,多張則打包成 ZIP。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const applyBtn = document.getElementById('applyBtn');
+const previewWrap = document.getElementById('previewWrap');
+const previewCanvas = document.getElementById('previewCanvas');
+const fileListWrap = document.getElementById('fileListWrap');
+const fileList = document.getElementById('fileList');
+const textOpts = document.getElementById('textOpts');
+const imageOpts = document.getElementById('imageOpts');
+const wmText = document.getElementById('wmText');
+const wmFontSize = document.getElementById('wmFontSize');
+const wmColor = document.getElementById('wmColor');
+const chooseWmImgBtn = document.getElementById('chooseWmImgBtn');
+const wmImgInput = document.getElementById('wmImgInput');
+const wmImgInfo = document.getElementById('wmImgInfo');
+const wmImgScale = document.getElementById('wmImgScale');
+const wmImgScaleVal = document.getElementById('wmImgScaleVal');
+const posGrid = document.getElementById('posGrid');
+const tileChk = document.getElementById('tileChk');
+const wmOpacity = document.getElementById('wmOpacity');
+const wmOpacityVal = document.getElementById('wmOpacityVal');
+const wmRotate = document.getElementById('wmRotate');
+const wmRotateVal = document.getElementById('wmRotateVal');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+chooseWmImgBtn.addEventListener('click', () => wmImgInput.click());
+
+let files = []; // {name, img}
+let wmImage = null;
+let selectedPos = 'center';
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = URL.createObjectURL(file);
+  });
+}
+
+document.querySelectorAll('input[name="wmType"]').forEach(r => r.addEventListener('change', () => {
+  const t = document.querySelector('input[name="wmType"]:checked').value;
+  textOpts.style.display = t === 'text' ? 'flex' : 'none';
+  imageOpts.style.display = t === 'image' ? 'flex' : 'none';
+  renderPreview();
+}));
+
+posGrid.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+  posGrid.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedPos = btn.dataset.pos;
+  renderPreview();
+}));
+
+[wmText, wmFontSize, wmColor, wmImgScale, tileChk, wmOpacity, wmRotate].forEach(el => {
+  el.addEventListener('input', () => {
+    wmImgScaleVal.textContent = wmImgScale.value + '%';
+    wmOpacityVal.textContent = wmOpacity.value + '%';
+    wmRotateVal.textContent = wmRotate.value + '°';
+    renderPreview();
+  });
+});
+
+fileInput.addEventListener('change', async () => {
+  for (const f of fileInput.files) {
+    const img = await loadImage(f);
+    files.push({ name: f.name, img });
+  }
+  fileInput.value = '';
+  renderFileList();
+  renderPreview();
+});
+
+wmImgInput.addEventListener('change', async () => {
+  const f = wmImgInput.files[0];
+  if (!f) return;
+  wmImage = await loadImage(f);
+  wmImgInfo.textContent = `已選:${f.name}`;
+  renderPreview();
+});
+
+function renderFileList() {
+  fileListWrap.style.display = files.length ? 'block' : 'none';
+  applyBtn.disabled = files.length === 0;
+  fileInfo.textContent = files.length ? `共 ${files.length} 張圖片` : '';
+  fileList.innerHTML = '';
+  files.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${f.name}(${f.img.naturalWidth}×${f.img.naturalHeight}px)</span><button class="btn" data-idx="${idx}">移除</button>`;
+    row.querySelector('button').addEventListener('click', () => { files.splice(idx, 1); renderFileList(); renderPreview(); });
+    fileList.appendChild(row);
+  });
+}
+
+function drawWatermark(ctx, w, h) {
+  const type = document.querySelector('input[name="wmType"]:checked').value;
+  const opacity = Number(wmOpacity.value) / 100;
+  const rotateDeg = Number(wmRotate.value);
+  const tiled = tileChk.checked;
+  ctx.save();
+  ctx.globalAlpha = opacity;
+
+  if (type === 'text') {
+    const text = wmText.value || '';
+    const fontSize = Number(wmFontSize.value);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = wmColor.value;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width, th = fontSize;
+    if (tiled) {
+      const stepX = tw + fontSize * 1.5, stepY = th + fontSize * 1.5;
+      for (let y = -stepY; y < h + stepY; y += stepY) {
+        for (let x = -stepX; x < w + stepX; x += stepX) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rotateDeg * Math.PI / 180);
+          ctx.fillText(text, 0, 0);
+          ctx.restore();
+        }
+      }
+    } else {
+      const [x, y] = posToXY(selectedPos, w, h, tw, th);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotateDeg * Math.PI / 180);
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  } else if (wmImage) {
+    const scale = Number(wmImgScale.value) / 100;
+    const tw = w * scale;
+    const th = tw * (wmImage.naturalHeight / wmImage.naturalWidth);
+    if (tiled) {
+      const stepX = tw * 1.4, stepY = th * 1.4;
+      for (let y = -stepY; y < h + stepY; y += stepY) {
+        for (let x = -stepX; x < w + stepX; x += stepX) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rotateDeg * Math.PI / 180);
+          ctx.drawImage(wmImage, -tw / 2, -th / 2, tw, th);
+          ctx.restore();
+        }
+      }
+    } else {
+      const [x, y] = posToXY(selectedPos, w, h, tw, th);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotateDeg * Math.PI / 180);
+      ctx.drawImage(wmImage, -tw / 2, -th / 2, tw, th);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function posToXY(pos, w, h, tw, th) {
+  const pad = 24;
+  const map = {
+    'top-left': [pad + tw / 2, pad + th / 2],
+    'top-center': [w / 2, pad + th / 2],
+    'top-right': [w - pad - tw / 2, pad + th / 2],
+    'center-left': [pad + tw / 2, h / 2],
+    'center': [w / 2, h / 2],
+    'center-right': [w - pad - tw / 2, h / 2],
+    'bottom-left': [pad + tw / 2, h - pad - th / 2],
+    'bottom-center': [w / 2, h - pad - th / 2],
+    'bottom-right': [w - pad - tw / 2, h - pad - th / 2],
+  };
+  return map[pos];
+}
+
+function renderPreview() {
+  if (!files.length) { previewWrap.style.display = 'none'; return; }
+  previewWrap.style.display = 'block';
+  const img = files[0].img;
+  previewCanvas.width = img.naturalWidth;
+  previewCanvas.height = img.naturalHeight;
+  const ctx = previewCanvas.getContext('2d');
+  ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+  ctx.drawImage(img, 0, 0);
+  drawWatermark(ctx, previewCanvas.width, previewCanvas.height);
+}
+
+applyBtn.addEventListener('click', async () => {
+  if (!files.length) return;
+  applyBtn.disabled = true;
+  setStatus(statusMsg, '處理中...');
+  try {
+    const results = [];
+    for (const f of files) {
+      const c = document.createElement('canvas');
+      c.width = f.img.naturalWidth;
+      c.height = f.img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(f.img, 0, 0);
+      drawWatermark(ctx, c.width, c.height);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      results.push({ name: f.name.replace(/\.[^.]+$/, '') + '-watermark.png', blob });
+    }
+    if (results.length === 1) {
+      const url = URL.createObjectURL(results[0].blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = results[0].name;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } else {
+      const zip = new JSZip();
+      results.forEach(r => zip.file(r.name, r.blob));
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'watermarked-images.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+    setStatus(statusMsg, `完成:已處理 ${results.length} 張圖片`);
+  } catch (e) {
+    setStatus(statusMsg, '處理失敗:' + e.message, true);
+  }
+  applyBtn.disabled = false;
+});
+</script>
+</body>
+</html>

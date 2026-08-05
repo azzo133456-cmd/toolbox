@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片拼接 / 九宮格切割 | 小工具箱</title>
+<meta name="description" content="免費線上圖片拼接與九宮格切割工具,可把多張圖片拼成一張,或把一張圖片切成 N×N 格,適合社群貼文。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  #resultCanvas { max-width: 100%; max-height: 460px; display: block; margin: 0 auto; border-radius: 8px; }
+  .canvas-panel { text-align: center; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .file-row { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.3rem; border-bottom:1px solid var(--border); font-size:0.85rem; }
+  .split-preview { display:grid; gap:2px; max-width:460px; margin:0 auto; }
+  .split-preview img { width:100%; display:block; border:1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片拼接 / 九宮格切割</div>
+  <h1 class="page-title">圖片拼接 / 九宮格切割</h1>
+  <p class="page-desc">把多張圖片拼成一張,或把一張圖片切成 N×N 格,適合製作社群九宮格貼文。全部在瀏覽器端處理,圖片不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="combine" checked> 拼接(多圖 → 一張)</label>
+    <label><input type="radio" name="mode" value="split"> 切割(一張 → 多格)</label>
+  </div>
+
+  <!-- combine -->
+  <div id="combinePanel">
+    <div class="dropzone" id="combineDropzone">
+      <button class="btn btn-primary" id="combineChooseBtn">選擇圖片(可多選)</button>
+      <input type="file" id="combineFileInput" accept="image/*" multiple style="display:none;">
+      <span class="dropzone-hint">或把圖片拖曳到這裡,依加入順序排列</span>
+    </div>
+    <div class="controls-row">
+      <label>每列張數 <input type="number" id="colsInput" value="3" min="1" max="10" style="width:60px;"></label>
+      <label>間距(px) <input type="number" id="gapInput" value="8" min="0" max="60" style="width:60px;"></label>
+      <label>背景色 <input type="color" id="bgColorInput" value="#ffffff"></label>
+      <button class="btn btn-primary" id="combineBtn" disabled>產生拼接圖並下載</button>
+    </div>
+    <div id="combineFileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
+      <div class="panel-header"><span>圖片順序</span></div>
+      <div id="combineFileList" style="padding:0.4rem;"></div>
+    </div>
+  </div>
+
+  <!-- split -->
+  <div id="splitPanel" style="display:none;">
+    <div class="dropzone" id="splitDropzone">
+      <button class="btn btn-primary" id="splitChooseBtn">選擇一張圖片</button>
+      <input type="file" id="splitFileInput" accept="image/*" style="display:none;">
+      <span id="splitFileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+      <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+    </div>
+    <div class="controls-row">
+      <label>橫向切割數(欄) <input type="number" id="splitColsInput" value="3" min="1" max="10" style="width:60px;"></label>
+      <label>縱向切割數(列) <input type="number" id="splitRowsInput" value="3" min="1" max="10" style="width:60px;"></label>
+      <button class="btn btn-primary" id="splitBtn" disabled>切割並下載 ZIP</button>
+    </div>
+    <div id="splitPreviewWrap" style="display:none;">
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;text-align:center;">切割預覽</div>
+      <div class="split-preview" id="splitPreview"></div>
+    </div>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="canvas-panel" id="resultWrap" style="display:none;margin-top:1rem;">
+    <div style="margin-bottom:0.5rem;font-size:0.8rem;color:var(--text-muted);">拼接結果預覽</div>
+    <canvas id="resultCanvas"></canvas>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p><strong>拼接模式</strong>:依加入順序把圖片排成網格,每張圖片會依「每列張數」等比縮放到相同寬度。<strong>切割模式</strong>:把一張圖片依欄數 × 列數切成多個小圖,常用於製作 IG 九宮格貼文(3×3),切割結果會打包成 ZIP,檔名依序編號方便貼文時排列。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = URL.createObjectURL(file);
+  });
+}
+
+// mode switch
+const combinePanel = document.getElementById('combinePanel');
+const splitPanel = document.getElementById('splitPanel');
+const resultWrap = document.getElementById('resultWrap');
+const statusMsg = document.getElementById('statusMsg');
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  combinePanel.style.display = mode === 'combine' ? 'block' : 'none';
+  splitPanel.style.display = mode === 'split' ? 'block' : 'none';
+  resultWrap.style.display = 'none';
+  setStatus(statusMsg, '');
+}));
+
+// ---- combine ----
+const combineChooseBtn = document.getElementById('combineChooseBtn');
+const combineFileInput = document.getElementById('combineFileInput');
+const combineFileListWrap = document.getElementById('combineFileListWrap');
+const combineFileList = document.getElementById('combineFileList');
+const combineBtn = document.getElementById('combineBtn');
+const colsInput = document.getElementById('colsInput');
+const gapInput = document.getElementById('gapInput');
+const bgColorInput = document.getElementById('bgColorInput');
+const resultCanvas = document.getElementById('resultCanvas');
+
+setupDropzone(document.getElementById('combineDropzone'), combineFileInput);
+combineChooseBtn.addEventListener('click', () => combineFileInput.click());
+
+let combineFiles = []; // {name, img}
+
+combineFileInput.addEventListener('change', async () => {
+  for (const f of combineFileInput.files) {
+    const img = await loadImage(f);
+    combineFiles.push({ name: f.name, img });
+  }
+  combineFileInput.value = '';
+  renderCombineList();
+});
+
+function renderCombineList() {
+  combineFileListWrap.style.display = combineFiles.length ? 'block' : 'none';
+  combineBtn.disabled = combineFiles.length < 2;
+  combineFileList.innerHTML = '';
+  combineFiles.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `<span style="flex:1;">${idx + 1}. ${f.name}</span>
+      <button class="btn" data-act="up">↑</button>
+      <button class="btn" data-act="down">↓</button>
+      <button class="btn" data-act="remove">✕</button>`;
+    row.querySelector('[data-act="up"]').addEventListener('click', () => { if (idx > 0) { [combineFiles[idx - 1], combineFiles[idx]] = [combineFiles[idx], combineFiles[idx - 1]]; renderCombineList(); } });
+    row.querySelector('[data-act="down"]').addEventListener('click', () => { if (idx < combineFiles.length - 1) { [combineFiles[idx + 1], combineFiles[idx]] = [combineFiles[idx], combineFiles[idx + 1]]; renderCombineList(); } });
+    row.querySelector('[data-act="remove"]').addEventListener('click', () => { combineFiles.splice(idx, 1); renderCombineList(); });
+    combineFileList.appendChild(row);
+  });
+}
+
+combineBtn.addEventListener('click', () => {
+  const cols = Math.max(1, Number(colsInput.value));
+  const gap = Math.max(0, Number(gapInput.value));
+  const rows = Math.ceil(combineFiles.length / cols);
+  // cell width = min natural width among images (avoid huge upscale), keep aspect ratio per image, row height = max height in that row after scaling to cellWidth
+  const cellWidth = Math.min(...combineFiles.map(f => f.img.naturalWidth));
+  const scaledHeights = combineFiles.map(f => cellWidth * (f.img.naturalHeight / f.img.naturalWidth));
+  const rowHeights = [];
+  for (let r = 0; r < rows; r++) {
+    const rowItems = scaledHeights.slice(r * cols, r * cols + cols);
+    rowHeights.push(Math.max(...rowItems));
+  }
+  const canvasWidth = cols * cellWidth + (cols - 1) * gap;
+  const canvasHeight = rowHeights.reduce((a, b) => a + b, 0) + (rows - 1) * gap;
+
+  resultCanvas.width = canvasWidth;
+  resultCanvas.height = canvasHeight;
+  const ctx = resultCanvas.getContext('2d');
+  ctx.fillStyle = bgColorInput.value;
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+  let y = 0;
+  for (let r = 0; r < rows; r++) {
+    let x = 0;
+    const rowItems = combineFiles.slice(r * cols, r * cols + cols);
+    rowItems.forEach((f) => {
+      const h = cellWidth * (f.img.naturalHeight / f.img.naturalWidth);
+      ctx.drawImage(f.img, x, y, cellWidth, h);
+      x += cellWidth + gap;
+    });
+    y += rowHeights[r] + gap;
+  }
+
+  resultWrap.style.display = 'block';
+  resultCanvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'collage.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+  setStatus(statusMsg, `完成:已拼接 ${combineFiles.length} 張圖片`);
+});
+
+// ---- split ----
+const splitChooseBtn = document.getElementById('splitChooseBtn');
+const splitFileInput = document.getElementById('splitFileInput');
+const splitFileInfo = document.getElementById('splitFileInfo');
+const splitColsInput = document.getElementById('splitColsInput');
+const splitRowsInput = document.getElementById('splitRowsInput');
+const splitBtn = document.getElementById('splitBtn');
+const splitPreviewWrap = document.getElementById('splitPreviewWrap');
+const splitPreview = document.getElementById('splitPreview');
+
+setupDropzone(document.getElementById('splitDropzone'), splitFileInput);
+splitChooseBtn.addEventListener('click', () => splitFileInput.click());
+
+let splitImg = null;
+let splitName = 'image';
+
+splitFileInput.addEventListener('change', async () => {
+  const f = splitFileInput.files[0];
+  if (!f) return;
+  splitImg = await loadImage(f);
+  splitName = f.name.replace(/\.[^.]+$/, '');
+  splitFileInfo.textContent = `已載入:${f.name}(${splitImg.naturalWidth}×${splitImg.naturalHeight}px)`;
+  splitBtn.disabled = false;
+  renderSplitPreview();
+});
+[splitColsInput, splitRowsInput].forEach(el => el.addEventListener('input', renderSplitPreview));
+
+function getTileBlobs() {
+  const cols = Math.max(1, Number(splitColsInput.value));
+  const rows = Math.max(1, Number(splitRowsInput.value));
+  const tileW = Math.floor(splitImg.naturalWidth / cols);
+  const tileH = Math.floor(splitImg.naturalHeight / rows);
+  const tiles = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = tileW; canvas.height = tileH;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(splitImg, c * tileW, r * tileH, tileW, tileH, 0, 0, tileW, tileH);
+      tiles.push({ canvas, row: r, col: c });
+    }
+  }
+  return { tiles, cols, rows };
+}
+
+function renderSplitPreview() {
+  if (!splitImg) return;
+  const { tiles, cols } = getTileBlobs();
+  splitPreview.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  splitPreview.innerHTML = '';
+  tiles.forEach(t => {
+    const img = document.createElement('img');
+    img.src = t.canvas.toDataURL('image/png');
+    splitPreview.appendChild(img);
+  });
+  splitPreviewWrap.style.display = 'block';
+}
+
+splitBtn.addEventListener('click', async () => {
+  if (!splitImg) return;
+  setStatus(statusMsg, '切割中...');
+  splitBtn.disabled = true;
+  try {
+    const { tiles, cols, rows } = getTileBlobs();
+    const zip = new JSZip();
+    for (let i = 0; i < tiles.length; i++) {
+      const t = tiles[i];
+      const blob = await new Promise(res => t.canvas.toBlob(res, 'image/png'));
+      const idxStr = String(i + 1).padStart(2, '0');
+      zip.file(`${splitName}-${idxStr}-r${t.row + 1}c${t.col + 1}.png`, blob);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${splitName}-split-${cols}x${rows}.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    setStatus(statusMsg, `完成:已切割成 ${tiles.length} 格`);
+  } catch (e) {
+    setStatus(statusMsg, '切割失敗:' + e.message, true);
+  }
+  splitBtn.disabled = false;
+});
+</script>
+</body>
+</html>

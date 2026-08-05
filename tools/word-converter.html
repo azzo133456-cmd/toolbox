@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word 文件轉換 | 小工具箱</title>
+<meta name="description" content="免費線上 Word 文件轉換工具,把 .docx 檔案轉成 PDF、Markdown 或純文字,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown-plugin-gfm@1.0.2/dist/turndown-plugin-gfm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  #htmlPreview { padding: 1rem; max-height: 500px; overflow: auto; background: #fff; color: #111; }
+  #htmlPreview img { max-width: 100%; }
+  #htmlPreview table { border-collapse: collapse; }
+  #htmlPreview table, #htmlPreview td, #htmlPreview th { border: 1px solid #999; padding: 4px 8px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#docs">文書轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / Word 文件轉換</div>
+  <h1 class="page-title">Word 文件轉換</h1>
+  <p class="page-desc">上傳 .docx 檔案,轉成 PDF、Markdown 或純文字。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇 .docx 檔案</button>
+    <input type="file" id="fileInput" accept=".docx" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把 .docx 檔案拖曳到這裡</span>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel" id="previewWrap" style="display:none;margin-bottom:1rem;">
+    <div class="panel-header">
+      <span>內容預覽</span>
+      <div class="actions">
+        <button class="btn" id="downloadMd">下載 Markdown</button>
+        <button class="btn" id="downloadTxt">下載純文字</button>
+        <button class="btn btn-primary" id="downloadPdf">下載 PDF</button>
+      </div>
+    </div>
+    <div id="htmlPreview"></div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>轉換引擎為開源的 <strong>Mammoth.js</strong>(docx → HTML)。「下載 PDF」是把預覽內容排版輸出,複雜版面(多欄、特殊圖形、精細樣式)可能與原始 Word 檔有落差;若只需要文字內容,建議使用 Markdown 或純文字下載,還原度較高。圖片、表格、標題層級會盡量保留。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const previewWrap = document.getElementById('previewWrap');
+const htmlPreview = document.getElementById('htmlPreview');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let currentName = 'document';
+let currentHtml = '';
+let currentRawText = '';
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentName = f.name.replace(/\.docx$/i, '');
+  fileInfo.textContent = `已載入:${f.name}`;
+  setStatus(statusMsg, '轉換中...');
+  previewWrap.style.display = 'none';
+  try {
+    const buffer = await f.arrayBuffer();
+    const htmlResult = await mammoth.convertToHtml({ arrayBuffer: buffer });
+    currentHtml = htmlResult.value;
+    htmlPreview.innerHTML = currentHtml;
+    previewWrap.style.display = 'block';
+    currentRawText = htmlPreview.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    const warnCount = htmlResult.messages.length;
+    setStatus(statusMsg, `轉換完成${warnCount ? `(${warnCount} 項樣式無法完整還原)` : ''}`);
+  } catch (e) {
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+});
+
+document.getElementById('downloadTxt').addEventListener('click', () => {
+  downloadText(currentName + '.txt', currentRawText);
+});
+
+document.getElementById('downloadMd').addEventListener('click', () => {
+  const turndownService = new TurndownService({ headingStyle: 'atx' });
+  if (window.turndownPluginGfm) turndownService.use(turndownPluginGfm.gfm);
+  const md = turndownService.turndown(currentHtml);
+  downloadText(currentName + '.md', md);
+});
+
+document.getElementById('downloadPdf').addEventListener('click', async () => {
+  setStatus(statusMsg, '產生 PDF 中...(內容較多可能需要一些時間)');
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    await doc.html(htmlPreview, {
+      x: 24, y: 24,
+      width: 547, // A4 width(595pt) - margins
+      windowWidth: htmlPreview.scrollWidth || 800,
+      autoPaging: 'text',
+    });
+    doc.save(currentName + '.pdf');
+    setStatus(statusMsg, 'PDF 已產生');
+  } catch (e) {
+    setStatus(statusMsg, 'PDF 產生失敗:' + e.message, true);
+  }
+});
+</script>
+</body>
+</html>

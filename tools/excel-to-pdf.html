@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excel 轉 PDF | 小工具箱</title>
+<meta name="description" content="免費線上 Excel 轉 PDF 工具,把 .xlsx / .csv 試算表轉成 PDF 表格,支援多工作表,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  .sheet-tabs { display:flex; flex-wrap:wrap; gap:0.4rem; margin:0.75rem 0; }
+  .sheet-tabs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #previewTableWrap { overflow:auto; max-height:420px; }
+  #previewTable { border-collapse:collapse; font-size:0.8rem; width:100%; }
+  #previewTable td, #previewTable th { border:1px solid var(--border); padding:4px 8px; white-space:nowrap; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#docs">文書轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / Excel 轉 PDF</div>
+  <h1 class="page-title">Excel 轉 PDF</h1>
+  <p class="page-desc">上傳 .xlsx / .xls / .csv 試算表,轉成 PDF 表格下載,支援多工作表(每個工作表一頁起)。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇試算表檔案</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把檔案拖曳到這裡</span>
+  </div>
+
+  <div class="controls-row">
+    <label>紙張方向
+      <select id="orientSelect">
+        <option value="landscape" selected>橫向</option>
+        <option value="portrait">直向</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="allSheetsChk"> 匯出全部工作表(否則只匯出目前選擇的分頁)</label>
+    <button class="btn btn-primary" id="convertBtn" disabled>轉換並下載 PDF</button>
+  </div>
+
+  <div class="sheet-tabs" id="sheetTabs"></div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel" id="previewWrap" style="display:none;">
+    <div class="panel-header"><span>內容預覽</span></div>
+    <div id="previewTableWrap"><table id="previewTable"></table></div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>欄位較多時建議選擇「橫向」紙張以避免內容被截斷;若表格仍超出頁寬,PDF 會自動縮小字體以容納欄位。多工作表檔案可選擇只匯出目前分頁,或一次匯出全部(各工作表會分開成不同頁面區塊)。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const convertBtn = document.getElementById('convertBtn');
+const sheetTabs = document.getElementById('sheetTabs');
+const previewWrap = document.getElementById('previewWrap');
+const previewTable = document.getElementById('previewTable');
+const orientSelect = document.getElementById('orientSelect');
+const allSheetsChk = document.getElementById('allSheetsChk');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let workbook = null;
+let currentSheetName = '';
+let currentName = 'sheet';
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentName = f.name.replace(/\.[^.]+$/, '');
+  fileInfo.textContent = `已載入:${f.name}`;
+  setStatus(statusMsg, '讀取中...');
+  try {
+    const buffer = await f.arrayBuffer();
+    workbook = XLSX.read(buffer, { type: 'array' });
+    renderSheetTabs();
+    selectSheet(workbook.SheetNames[0]);
+    convertBtn.disabled = false;
+    setStatus(statusMsg, `讀取完成:共 ${workbook.SheetNames.length} 個工作表`);
+  } catch (e) {
+    setStatus(statusMsg, '讀取失敗:' + e.message, true);
+  }
+});
+
+function renderSheetTabs() {
+  sheetTabs.innerHTML = '';
+  workbook.SheetNames.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = name;
+    btn.addEventListener('click', () => selectSheet(name));
+    sheetTabs.appendChild(btn);
+  });
+}
+
+function sheetToRows(sheetName) {
+  const sheet = workbook.Sheets[sheetName];
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+}
+
+function selectSheet(name) {
+  currentSheetName = name;
+  [...sheetTabs.children].forEach(b => b.classList.toggle('active', b.textContent === name));
+  const rows = sheetToRows(name);
+  previewTable.innerHTML = '';
+  rows.slice(0, 50).forEach((row, ri) => {
+    const tr = document.createElement('tr');
+    row.forEach(cell => {
+      const cellEl = document.createElement(ri === 0 ? 'th' : 'td');
+      cellEl.textContent = cell;
+      tr.appendChild(cellEl);
+    });
+    previewTable.appendChild(tr);
+  });
+  previewWrap.style.display = 'block';
+}
+
+convertBtn.addEventListener('click', () => {
+  if (!workbook) return;
+  setStatus(statusMsg, '產生 PDF 中...');
+  try {
+    const { jsPDF } = window.jspdf;
+    const orientation = orientSelect.value === 'landscape' ? 'l' : 'p';
+    const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
+    const sheetsToExport = allSheetsChk.checked ? workbook.SheetNames : [currentSheetName];
+
+    sheetsToExport.forEach((name, idx) => {
+      if (idx > 0) pdf.addPage();
+      const rows = sheetToRows(name);
+      pdf.setFontSize(12);
+      pdf.text(name, 30, 30);
+      pdf.autoTable({
+        head: rows.length ? [rows[0].map(String)] : [[]],
+        body: rows.slice(1).map(r => r.map(String)),
+        startY: 40,
+        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+        headStyles: { fillColor: [79, 70, 229] },
+        margin: { left: 24, right: 24 },
+      });
+    });
+
+    pdf.save(`${currentName}.pdf`);
+    setStatus(statusMsg, 'PDF 已產生');
+  } catch (e) {
+    setStatus(statusMsg, '產生失敗:' + e.message, true);
+  }
+});
+</script>
+</body>
+</html>
