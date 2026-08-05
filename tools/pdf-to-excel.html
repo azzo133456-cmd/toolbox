@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 轉 Excel | 小工具箱</title>
+<meta name="description" content="免費線上 PDF 轉 Excel 工具,擷取 PDF 文字內容並依欄位間距推算表格,匯出成 .xlsx,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / PDF 轉 Excel</div>
+  <h1 class="page-title">PDF 轉 Excel</h1>
+  <p class="page-desc">上傳 PDF,擷取文字內容並依欄位間距自動推算表格欄位,匯出成 .xlsx。適合欄位對齊清楚的表格類 PDF;掃描圖檔 PDF、複雜合併儲存格或無明顯欄位間距的版面無法完美還原,建議下載後人工校對。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
+    <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+  </div>
+
+  <div class="controls-row">
+    <label>欄位偵測靈敏度(數值越大,判定為新欄位所需的間距越大)
+      <input type="number" id="gapInput" value="12" min="2" max="60" style="width:80px;">
+    </label>
+    <button class="btn btn-primary" id="convertBtn" disabled>轉換</button>
+    <button class="btn" id="downloadBtn" disabled>下載 .xlsx</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel" id="previewPanel" style="display:none;">
+    <div class="panel-header"><span>預覽(第 1 頁)</span></div>
+    <div style="overflow:auto;max-height:420px;">
+      <table id="previewTable" style="border-collapse:collapse;width:100%;font-size:0.85rem;"></table>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。如果轉出來的欄位切得太細或太少,可以調整「欄位偵測靈敏度」數值後重新轉換:數值越大越不容易被切成新欄位。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const gapInput = document.getElementById('gapInput');
+const convertBtn = document.getElementById('convertBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const statusMsg = document.getElementById('statusMsg');
+const previewPanel = document.getElementById('previewPanel');
+const previewTable = document.getElementById('previewTable');
+
+let pdfDoc = null;
+let currentName = 'document';
+let sheetsData = []; // array of {name, rows}
+
+chooseBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentName = f.name.replace(/\.pdf$/i, '');
+  setStatus(statusMsg, '讀取中...');
+  try {
+    const buffer = await f.arrayBuffer();
+    pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    fileInfo.textContent = `已載入:${f.name}(共 ${pdfDoc.numPages} 頁)`;
+    convertBtn.disabled = false;
+    downloadBtn.disabled = true;
+    setStatus(statusMsg, '');
+  } catch (e) {
+    setStatus(statusMsg, '讀取 PDF 失敗:' + e.message, true);
+  }
+});
+
+async function extractPageRows(page, gapThreshold) {
+  const content = await page.getTextContent();
+  // group items into lines by y coordinate
+  const lineMap = [];
+  content.items.forEach(item => {
+    if (item.str === '') return;
+    const y = Math.round(item.transform[5]);
+    const x = item.transform[4];
+    let line = lineMap.find(l => Math.abs(l.y - y) <= 2);
+    if (!line) { line = { y, items: [] }; lineMap.push(line); }
+    line.items.push({ x, endX: x + item.width, str: item.str, isSpace: !item.str.trim() });
+  });
+  lineMap.sort((a, b) => b.y - a.y); // top to bottom (PDF y grows upward)
+
+  // pdf.js synthesizes oversized "space" items that stretch across the whole
+  // visual gap between two real text runs, so their own width can't be used
+  // to extend the "last real end" position — only real (non-space) items can.
+  const rows = lineMap.map(line => {
+    line.items.sort((a, b) => a.x - b.x);
+    const cells = [];
+    let cur = '';
+    let lastRealEndX = null;
+    line.items.forEach(it => {
+      if (it.isSpace) {
+        if (it.endX - it.x > gapThreshold) {
+          if (cur.trim() !== '') { cells.push(cur.trim()); cur = ''; }
+        } else {
+          cur += ' ';
+        }
+        return;
+      }
+      if (lastRealEndX !== null && (it.x - lastRealEndX) > gapThreshold) {
+        if (cur.trim() !== '') cells.push(cur.trim());
+        cur = it.str;
+      } else {
+        cur += it.str;
+      }
+      lastRealEndX = it.endX;
+    });
+    if (cur.trim() !== '') cells.push(cur.trim());
+    return cells;
+  }).filter(r => r.length && r.some(c => c !== ''));
+
+  return rows;
+}
+
+function renderPreview(rows) {
+  previewTable.innerHTML = '';
+  rows.slice(0, 30).forEach(r => {
+    const tr = document.createElement('tr');
+    r.forEach(c => {
+      const td = document.createElement('td');
+      td.textContent = c;
+      td.style.cssText = 'border:1px solid var(--border);padding:0.3rem 0.5rem;white-space:nowrap;';
+      tr.appendChild(td);
+    });
+    previewTable.appendChild(tr);
+  });
+  previewPanel.style.display = rows.length ? 'block' : 'none';
+}
+
+convertBtn.addEventListener('click', async () => {
+  if (!pdfDoc) return;
+  convertBtn.disabled = true;
+  const gapThreshold = Number(gapInput.value) || 12;
+  sheetsData = [];
+  try {
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      setStatus(statusMsg, `轉換中... (${i}/${pdfDoc.numPages} 頁)`);
+      const page = await pdfDoc.getPage(i);
+      const rows = await extractPageRows(page, gapThreshold);
+      sheetsData.push({ name: `頁${i}`, rows });
+    }
+    renderPreview(sheetsData[0] ? sheetsData[0].rows : []);
+    const totalRows = sheetsData.reduce((s, d) => s + d.rows.length, 0);
+    setStatus(statusMsg, `轉換完成:共 ${pdfDoc.numPages} 頁,${totalRows} 列資料`);
+    downloadBtn.disabled = totalRows === 0;
+  } catch (e) {
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+  convertBtn.disabled = false;
+});
+
+downloadBtn.addEventListener('click', () => {
+  try {
+    const wb = XLSX.utils.book_new();
+    sheetsData.forEach(sheet => {
+      const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+      XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+    });
+    XLSX.writeFile(wb, currentName + '.xlsx');
+  } catch (e) {
+    setStatus(statusMsg, '匯出失敗:' + e.message, true);
+  }
+});
+</script>
+</body>
+</html>

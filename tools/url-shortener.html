@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>短網址產生器 | 小工具箱</title>
+<meta name="description" content="免費線上短網址產生器,把長網址轉成好分享的短網址。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 短網址產生器</div>
+  <h1 class="page-title">短網址產生器</h1>
+  <p class="page-desc">把長網址轉成好分享的短網址。</p>
+
+  <div class="ad-slot" style="border-color:var(--accent);color:var(--text);text-align:left;">
+    ⚠️ 這個工具跟其他工具不同:短網址需要有伺服器記住「短網址 → 原網址」的對應關係,才能讓任何人點擊都連得到。本工具串接第三方免費服務 <a href="https://is.gd" target="_blank" rel="noopener noreferrer">is.gd</a> 產生短網址,<strong>你輸入的網址會傳送給 is.gd</strong>,不是像本站其他工具一樣完全只在你的瀏覽器裡處理。請避免用來縮短含有個人隱私參數的網址。
+  </div>
+
+  <div class="controls-row" style="flex-wrap:wrap;">
+    <input type="text" id="longUrlInput" placeholder="貼上要縮短的網址,例如 https://example.com/very/long/path" style="flex:1;min-width:280px;">
+  </div>
+  <div class="controls-row">
+    <label>自訂短碼(選填)
+      <input type="text" id="customCodeInput" placeholder="例如 my-link" style="width:180px;">
+    </label>
+    <button class="btn btn-primary" id="shortenBtn">產生短網址</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel" id="resultPanel" style="display:none;">
+    <div class="panel-header">
+      <span>結果</span>
+      <div class="actions"><button class="btn" id="copyResult">複製</button></div>
+    </div>
+    <div style="padding:1rem;">
+      <a id="resultLink" href="#" target="_blank" rel="noopener noreferrer" style="font-size:1.1rem;font-weight:600;"></a>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>自訂短碼並非每次都能成功(可能已被其他人使用),失敗時請換一個短碼或留空讓系統自動產生。短網址服務由 is.gd 提供,長期可用性與轉址速度不受本站控制。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料(此工具例外,詳見上方說明)</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const longUrlInput = document.getElementById('longUrlInput');
+const customCodeInput = document.getElementById('customCodeInput');
+const shortenBtn = document.getElementById('shortenBtn');
+const statusMsg = document.getElementById('statusMsg');
+const resultPanel = document.getElementById('resultPanel');
+const resultLink = document.getElementById('resultLink');
+
+function normalizeUrl(u) {
+  u = u.trim();
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  return u;
+}
+
+shortenBtn.addEventListener('click', async () => {
+  const raw = longUrlInput.value.trim();
+  if (!raw) { setStatus(statusMsg, '請輸入網址', true); return; }
+  let url;
+  try { url = normalizeUrl(raw); new URL(url); } catch { setStatus(statusMsg, '網址格式不正確', true); return; }
+
+  shortenBtn.disabled = true;
+  resultPanel.style.display = 'none';
+  setStatus(statusMsg, '產生中...');
+
+  const params = new URLSearchParams({ format: 'json', url });
+  const customCode = customCodeInput.value.trim();
+  if (customCode) params.set('shorturl', customCode);
+
+  const maxAttempts = 3;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch('https://is.gd/create.php?' + params.toString());
+      const data = await res.json();
+      if (data.errormessage) {
+        setStatus(statusMsg, '產生失敗:' + data.errormessage, true);
+      } else {
+        resultLink.href = data.shorturl;
+        resultLink.textContent = data.shorturl;
+        resultPanel.style.display = 'block';
+        setStatus(statusMsg, '產生成功');
+      }
+      lastError = null;
+      break;
+    } catch (e) {
+      lastError = e;
+      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 600 * attempt));
+    }
+  }
+  if (lastError) {
+    setStatus(statusMsg, '連線失敗,已重試 ' + maxAttempts + ' 次,請稍後再試(' + lastError.message + ')', true);
+  }
+  shortenBtn.disabled = false;
+});
+
+document.getElementById('copyResult').addEventListener('click', (e) => copyText(resultLink.textContent, e.target));
+longUrlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') shortenBtn.click(); });
+</script>
+</body>
+</html>
