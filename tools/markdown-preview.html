@@ -89,14 +89,32 @@ const inputArea = document.getElementById('inputArea');
 const previewArea = document.getElementById('previewArea');
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function safeUrl(value, isImage) {
+  try {
+    const url = new URL(value.replace(/&amp;/g, '&').trim(), window.location.href);
+    const allowed = isImage
+      ? ['http:', 'https:'].includes(url.protocol)
+      : ['http:', 'https:', 'mailto:'].includes(url.protocol);
+    return allowed ? escHtml(url.href) : '';
+  } catch {
+    return '';
+  }
 }
 
 function inlineFormat(text) {
   let s = escHtml(text);
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/\!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" style="max-width:100%;">');
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  s = s.replace(/\!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, href) => {
+    const src = safeUrl(href, true);
+    return src ? `<img alt="${alt}" src="${src}" style="max-width:100%;">` : alt;
+  });
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
+    const safeHref = safeUrl(href, false);
+    return safeHref ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${label}</a>` : label;
+  });
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');

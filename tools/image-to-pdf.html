@@ -97,7 +97,7 @@ function renderList() {
     row.className = 'file-row';
     row.innerHTML = `
       <img class="thumb" src="${f.dataUrl}">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${f.name}(${f.w}×${f.h}px)</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${escapeHtml(f.name)}(${f.w}×${f.h}px)</span>
       <button class="btn" data-act="up">↑</button>
       <button class="btn" data-act="down">↓</button>
       <button class="btn" data-act="remove">✕</button>

@@ -90,7 +90,7 @@ function fmtValue(key, val) {
 
 function addRow(label, value) {
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;">${label}</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);word-break:break-all;">${value}</td>`;
+  tr.innerHTML = `<td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;">${escapeHtml(label)}</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);word-break:break-all;">${escapeHtml(value)}</td>`;
   exifTable.appendChild(tr);
 }
 

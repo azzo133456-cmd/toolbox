@@ -150,8 +150,8 @@ convertBtn.addEventListener('click', async () => {
       const card = document.createElement('div');
       card.className = 'thumb-card';
       card.innerHTML = `
-        <img src="${url}" alt="${name}">
-        <div class="name">${name}</div>
+        <img src="${url}" alt="${escapeHtml(name)}">
+        <div class="name">${escapeHtml(name)}</div>
         <div class="size">${fmtSize(blob.size)}<span style="color:var(--text-muted);font-weight:400;"> (原 ${fmtSize(file.size)})</span></div>
         <button class="btn" style="margin-top:0.4rem;width:100%;">下載</button>
       `;

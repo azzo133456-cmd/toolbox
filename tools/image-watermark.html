@@ -193,7 +193,7 @@ function renderFileList() {
   files.forEach((f, idx) => {
     const row = document.createElement('div');
     row.className = 'file-row';
-    row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${f.name}(${f.img.naturalWidth}×${f.img.naturalHeight}px)</span><button class="btn" data-idx="${idx}">移除</button>`;
+    row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${escapeHtml(f.name)}(${f.img.naturalWidth}×${f.img.naturalHeight}px)</span><button class="btn" data-idx="${idx}">移除</button>`;
     row.querySelector('button').addEventListener('click', () => { files.splice(idx, 1); renderFileList(); renderPreview(); });
     fileList.appendChild(row);
   });

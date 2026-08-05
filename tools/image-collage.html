@@ -151,7 +151,7 @@ function renderCombineList() {
   combineFiles.forEach((f, idx) => {
     const row = document.createElement('div');
     row.className = 'file-row';
-    row.innerHTML = `<span style="flex:1;">${idx + 1}. ${f.name}</span>
+    row.innerHTML = `<span style="flex:1;">${idx + 1}. ${escapeHtml(f.name)}</span>
       <button class="btn" data-act="up">↑</button>
       <button class="btn" data-act="down">↓</button>
       <button class="btn" data-act="remove">✕</button>`;

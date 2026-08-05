@@ -85,6 +85,33 @@ let currentName = 'document';
 let currentHtml = '';
 let currentRawText = '';
 
+function isSafeDocumentUrl(value, tagName) {
+  if (tagName === 'IMG' && /^data:image\/(png|gif|jpe?g|webp);base64,/i.test(value)) return true;
+  try {
+    const url = new URL(value, window.location.href);
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeDocumentHtml(unsafeHtml) {
+  const template = document.createElement('template');
+  template.innerHTML = unsafeHtml;
+  template.content.querySelectorAll('script, iframe, object, embed, form, style, link, meta').forEach((node) => node.remove());
+  template.content.querySelectorAll('*').forEach((node) => {
+    for (const attribute of [...node.attributes]) {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || name === 'style') {
+        node.removeAttribute(attribute.name);
+      } else if ((name === 'href' || name === 'src') && !isSafeDocumentUrl(attribute.value, node.tagName)) {
+        node.removeAttribute(attribute.name);
+      }
+    }
+  });
+  return template.innerHTML;
+}
+
 fileInput.addEventListener('change', async () => {
   const f = fileInput.files[0];
   if (!f) return;
@@ -95,7 +122,7 @@ fileInput.addEventListener('change', async () => {
   try {
     const buffer = await f.arrayBuffer();
     const htmlResult = await mammoth.convertToHtml({ arrayBuffer: buffer });
-    currentHtml = htmlResult.value;
+    currentHtml = sanitizeDocumentHtml(htmlResult.value);
     htmlPreview.innerHTML = currentHtml;
     previewWrap.style.display = 'block';
     currentRawText = htmlPreview.innerText.replace(/\n{3,}/g, '\n\n').trim();
