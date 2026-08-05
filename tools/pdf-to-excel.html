@@ -35,9 +35,6 @@
   </div>
 
   <div class="controls-row">
-    <label>備援欄位偵測靈敏度(僅用於偵測不到標題列時,數值越大越不容易被切成新欄位)
-      <input type="number" id="gapInput" value="12" min="2" max="60" style="width:80px;">
-    </label>
     <button class="btn btn-primary" id="convertBtn" disabled>轉換</button>
     <button class="btn" id="downloadBtn" disabled>下載 .xlsx</button>
   </div>
@@ -52,7 +49,7 @@
 
   <div class="info-box">
     <h4>使用說明</h4>
-    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。系統會自動找出該頁欄位最多的那一列當作「標題列」,並以標題列的欄位位置為基準,把每一列的內容對齊到最接近的欄位。若某一頁完全偵測不到標題列(欄位數過少),才會改用「備援欄位偵測靈敏度」的間距規則切欄。由於多數 PDF 沒有真正的表格框線,極少數情況下相鄰欄位文字起始位置太接近,仍可能誤判合併,建議下載後檢查一次。</p>
+    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。系統會自動找出該頁欄位最多的那一列當作「標題列」,並以標題列的欄位位置為基準,把每一列的內容對齊到最接近的欄位。由於多數 PDF 沒有真正的表格框線,極少數情況下相鄰欄位文字起始位置太接近,仍可能誤判合併,建議下載後檢查一次。</p>
   </div>
 </main>
 
@@ -68,7 +65,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const chooseBtn = document.getElementById('chooseBtn');
 const fileInput = document.getElementById('fileInput');
 const fileInfo = document.getElementById('fileInfo');
-const gapInput = document.getElementById('gapInput');
+const DEFAULT_GAP_THRESHOLD = 12; // used only for pages with no detectable header row
 const convertBtn = document.getElementById('convertBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const statusMsg = document.getElementById('statusMsg');
@@ -202,13 +199,12 @@ function renderPreview(rows) {
 convertBtn.addEventListener('click', async () => {
   if (!pdfDoc) return;
   convertBtn.disabled = true;
-  const gapThreshold = Number(gapInput.value) || 12;
   sheetsData = [];
   try {
     for (let i = 1; i <= pdfDoc.numPages; i++) {
       setStatus(statusMsg, `轉換中... (${i}/${pdfDoc.numPages} 頁)`);
       const page = await pdfDoc.getPage(i);
-      const rows = await extractPageRows(page, gapThreshold);
+      const rows = await extractPageRows(page, DEFAULT_GAP_THRESHOLD);
       sheetsData.push({ name: `頁${i}`, rows });
     }
     renderPreview(sheetsData[0] ? sheetsData[0].rows : []);
