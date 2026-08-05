@@ -52,11 +52,14 @@
       <div class="panel-header">
         <span>輸入</span>
         <div class="actions">
+          <button class="btn" id="uploadBtn">上傳檔案</button>
+          <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.json,.md,.markdown,.html,.htm" style="display:none;">
           <button class="btn" id="loadSample">載入範例</button>
           <button class="btn" id="clearInput">清空</button>
         </div>
       </div>
-      <textarea id="inputArea" placeholder="貼上表格資料...">name,age,city
+      <div id="fileNameLabel" style="font-size:0.78rem;color:var(--text-muted);padding:0 0.9rem;display:none;"></div>
+      <textarea id="inputArea" placeholder="貼上表格資料,或點擊上方「上傳檔案」...">name,age,city
 Alice,30,Taipei
 Bob,25,Tainan</textarea>
     </div>
@@ -75,7 +78,7 @@ Bob,25,Tainan</textarea>
 
   <div class="info-box">
     <h4>使用說明</h4>
-    <p>TSV 格式可以直接從 Excel 或 Google Sheets 選取儲存格複製貼上,輸出的 TSV 也能直接貼回試算表。CSV 支援雙引號包住含逗號或換行的欄位。</p>
+    <p>TSV 格式可以直接從 Excel 或 Google Sheets 選取儲存格複製貼上,輸出的 TSV 也能直接貼回試算表。CSV 支援雙引號包住含逗號或換行的欄位。也可以點擊「上傳檔案」或直接把檔案拖曳到輸入框,系統會依副檔名自動判斷格式;轉換完成後按「下載」即可存成檔案。檔案內容只在你的瀏覽器裡處理,不會上傳到伺服器。</p>
   </div>
 </main>
 
@@ -93,6 +96,9 @@ const inputFormat = document.getElementById('inputFormat');
 const outputFormat = document.getElementById('outputFormat');
 const firstRowHeader = document.getElementById('firstRowHeader');
 const statusMsg = document.getElementById('statusMsg');
+const uploadBtn = document.getElementById('uploadBtn');
+const fileInput = document.getElementById('fileInput');
+const fileNameLabel = document.getElementById('fileNameLabel');
 
 // ---------- Parsers: format -> rows (array of arrays of strings) ----------
 
@@ -257,12 +263,53 @@ function convert() {
 [inputArea, inputFormat, outputFormat, firstRowHeader].forEach(el => el.addEventListener('input', convert));
 [inputFormat, outputFormat, firstRowHeader].forEach(el => el.addEventListener('change', convert));
 
+function extToFormat(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'tsv') return 'tsv';
+  if (ext === 'json') return 'json';
+  if (ext === 'md' || ext === 'markdown') return 'markdown';
+  if (ext === 'html' || ext === 'htm') return 'html';
+  return 'csv'; // csv, txt, 其他預設當 csv
+}
+
+uploadBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    setStatus(statusMsg, '檔案過大(超過 5MB),請改用較小的檔案', true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    inputArea.value = reader.result;
+    inputFormat.value = extToFormat(file.name);
+    fileNameLabel.style.display = 'block';
+    fileNameLabel.textContent = '已載入檔案:' + file.name;
+    convert();
+  };
+  reader.onerror = () => setStatus(statusMsg, '讀取檔案失敗', true);
+  reader.readAsText(file, 'UTF-8');
+  fileInput.value = '';
+});
+
+// 讓輸入區也能直接拖放檔案
+inputArea.addEventListener('dragover', (e) => e.preventDefault());
+inputArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  fileInput.files = e.dataTransfer.files;
+  fileInput.dispatchEvent(new Event('change'));
+});
+
 document.getElementById('loadSample').addEventListener('click', () => {
   inputArea.value = 'name,age,city\nAlice,30,Taipei\nBob,25,Tainan\nCarol,28,Kaohsiung';
   inputFormat.value = 'csv';
+  fileNameLabel.style.display = 'none';
   convert();
 });
-document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; convert(); });
+document.getElementById('clearInput').addEventListener('click', () => { inputArea.value = ''; fileNameLabel.style.display = 'none'; convert(); });
 document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
 document.getElementById('downloadOutput').addEventListener('click', () => {
   const ext = { csv: 'csv', tsv: 'tsv', json: 'json', markdown: 'md', html: 'html' }[outputFormat.value];
