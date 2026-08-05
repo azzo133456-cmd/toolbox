@@ -26,10 +26,11 @@
   <h1 class="page-title">PDF 轉 Markdown</h1>
   <p class="page-desc">上傳 PDF,擷取內含文字並轉成 Markdown。適合純文字或報告類 PDF;掃描圖檔 PDF、複雜表格與版面無法完美還原。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
 
-  <div class="controls-row">
+  <div class="dropzone" id="dropzone">
     <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
     <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
     <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把 PDF 檔案拖曳到這裡</span>
     <label style="margin-left:auto;"><input type="checkbox" id="pageHeadingChk" checked> 每頁加上標題</label>
   </div>
   <div class="status-msg" id="statusMsg"></div>
@@ -98,6 +99,7 @@ async function extractPageText(page) {
   return paragraphs.join('\n\n');
 }
 
+setupDropzone(document.getElementById('dropzone'), fileInput);
 chooseBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
   const f = fileInput.files[0];

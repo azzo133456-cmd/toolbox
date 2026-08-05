@@ -233,6 +233,25 @@ textarea {
   flex: 1;
 }
 
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dropzone .dropzone-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .btn {
   border: 1px solid var(--border);
   background: var(--surface);

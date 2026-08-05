@@ -33,10 +33,11 @@
 
   <!-- Compress panel -->
   <div id="compressPanel">
-    <div class="controls-row">
+    <div class="dropzone" id="compressDropzone">
       <button class="btn btn-primary" id="addFilesBtn">➕ 新增檔案</button>
       <input type="file" id="fileInput" multiple style="display:none;">
       <button class="btn" id="clearAllBtn">清空全部</button>
+      <span class="dropzone-hint">或把檔案拖曳到這裡</span>
     </div>
     <div id="fileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
       <div class="panel-header"><span>待壓縮檔案</span></div>
@@ -52,10 +53,11 @@
 
   <!-- Decompress panel -->
   <div id="decompressPanel" style="display:none;">
-    <div class="controls-row">
+    <div class="dropzone" id="decompressDropzone">
       <button class="btn btn-primary" id="chooseZipBtn">選擇 ZIP 檔案</button>
       <input type="file" id="zipInput" accept=".zip" style="display:none;">
       <span id="zipInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+      <span class="dropzone-hint">或把 ZIP 檔案拖曳到這裡</span>
     </div>
     <div id="extractListWrap" class="panel" style="display:none;">
       <div class="panel-header">
@@ -136,6 +138,7 @@ fileList.addEventListener('click', (e) => {
   renderFileList();
 });
 
+setupDropzone(document.getElementById('compressDropzone'), fileInput);
 addFilesBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => {
   Array.from(fileInput.files).forEach(f => pendingFiles.push(f));
@@ -172,6 +175,7 @@ const downloadAllBtn = document.getElementById('downloadAllBtn');
 
 let loadedZip = null;
 
+setupDropzone(document.getElementById('decompressDropzone'), zipInput);
 chooseZipBtn.addEventListener('click', () => zipInput.click());
 zipInput.addEventListener('change', async () => {
   const f = zipInput.files[0];

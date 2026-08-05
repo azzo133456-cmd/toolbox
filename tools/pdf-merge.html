@@ -26,10 +26,11 @@
   <h1 class="page-title">PDF 合併</h1>
   <p class="page-desc">上傳多個 PDF 檔案,調整順序後合併成一份 PDF,全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
 
-  <div class="controls-row">
+  <div class="dropzone" id="dropzone">
     <button class="btn btn-primary" id="addFilesBtn">➕ 新增 PDF 檔案</button>
     <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none;">
     <button class="btn" id="clearAllBtn">清空全部</button>
+    <span class="dropzone-hint">或把 PDF 檔案拖曳到這裡</span>
   </div>
 
   <div id="fileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
@@ -94,6 +95,7 @@ fileList.addEventListener('click', (e) => {
   renderList();
 });
 
+setupDropzone(document.getElementById('dropzone'), fileInput);
 addFilesBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
   for (const f of fileInput.files) {

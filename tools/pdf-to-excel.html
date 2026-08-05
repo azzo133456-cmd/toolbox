@@ -27,10 +27,11 @@
   <h1 class="page-title">PDF 轉 Excel</h1>
   <p class="page-desc">上傳 PDF,擷取文字內容並自動推算表格欄位,匯出成 .xlsx。適合有標題列的表格類 PDF(發票、明細表等);掃描圖檔 PDF、複雜合併儲存格或完全無標題列的版面無法完美還原,建議下載後人工校對。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
 
-  <div class="controls-row">
+  <div class="dropzone" id="dropzone">
     <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
     <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
     <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把 PDF 檔案拖曳到這裡</span>
   </div>
 
   <div class="controls-row">
@@ -78,6 +79,7 @@ let pdfDoc = null;
 let currentName = 'document';
 let sheetsData = []; // array of {name, rows}
 
+setupDropzone(document.getElementById('dropzone'), fileInput);
 chooseBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
   const f = fileInput.files[0];

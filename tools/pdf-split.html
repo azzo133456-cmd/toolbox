@@ -27,10 +27,11 @@
   <h1 class="page-title">PDF 拆分</h1>
   <p class="page-desc">上傳 PDF 檔案,依頁碼範圍擷取成新檔案,或把每一頁拆成獨立 PDF 打包成 zip 下載。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
 
-  <div class="controls-row">
+  <div class="dropzone" id="dropzone">
     <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
     <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
     <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把 PDF 檔案拖曳到這裡</span>
   </div>
 
   <div id="optionsWrap" style="display:none;">
@@ -74,6 +75,7 @@ const statusMsg = document.getElementById('statusMsg');
 
 let currentBuffer = null, currentName = '', pageCount = 0;
 
+setupDropzone(document.getElementById('dropzone'), fileInput);
 chooseBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
   const f = fileInput.files[0];
