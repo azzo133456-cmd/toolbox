@@ -1,8 +1,15 @@
 const express = require('express');
 
 const app = express();
-const SITE_URL = 'https://toolbox-web-production-f9b6.up.railway.app';
+const SITE_URL = 'https://toolboxspot.com';
 app.disable('x-powered-by');
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  if (host.endsWith('railway.app')) {
+    return res.redirect(301, `${SITE_URL}${req.originalUrl}`);
+  }
+  next();
+});
 app.use((req, res, next) => {
   res.set({
     'Referrer-Policy': 'strict-origin-when-cross-origin',

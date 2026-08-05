@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://toolbox-web-production-f9b6.up.railway.app/sitemap.xml
+Sitemap: https://toolboxspot.com/sitemap.xml
