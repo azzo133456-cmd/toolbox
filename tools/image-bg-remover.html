@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片去背 | 小工具箱</title>
+<meta name="description" content="免費線上圖片去背工具,支援 AI 自動辨識主體去背,或選色去背(適合純色背景),下載透明背景 PNG。">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .checker {
+    background-image:
+      linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    background-color: #fff;
+    border-radius: 8px;
+    display: inline-block;
+  }
+  #srcCanvas, #outCanvas { max-width: 100%; max-height: 360px; display: block; cursor: crosshair; }
+  .side-by-side { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width: 780px) { .side-by-side { grid-template-columns:1fr; } }
+  .canvas-panel { text-align:center; padding:1rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片去背</div>
+  <h1 class="page-title">圖片去背</h1>
+  <p class="page-desc">上傳圖片,自動或手動去背,下載透明背景的 PNG。全部在瀏覽器端處理,圖片不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="ai" checked> AI 自動辨識主體去背</label>
+    <label><input type="radio" name="mode" value="color"> 選色去背(適合純色背景)</label>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div id="aiControls" class="controls-row">
+    <button class="btn btn-primary" id="aiRunBtn" disabled>AI 自動去背</button>
+    <span style="font-size:0.8rem;color:var(--text-muted);">第一次使用需下載 AI 模型(約數十 MB),依網路速度可能需要一段時間,請耐心等候</span>
+  </div>
+
+  <div id="colorControls" class="controls-row" style="display:none;">
+    <span style="font-size:0.85rem;color:var(--text-muted);">在左側圖片上點一下要去除的背景顏色</span>
+    <label>已選顏色 <span id="pickedColorSwatch" style="display:inline-block;width:18px;height:18px;border:1px solid var(--border);border-radius:4px;vertical-align:middle;"></span></label>
+    <label>容許誤差
+      <input type="range" id="toleranceInput" min="5" max="150" value="40">
+      <span id="toleranceVal">40</span>
+    </label>
+    <button class="btn btn-primary" id="colorRunBtn" disabled>套用選色去背</button>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="side-by-side" id="canvasWrap" style="display:none;">
+    <div class="canvas-panel">
+      <div style="margin-bottom:0.5rem;font-size:0.8rem;color:var(--text-muted);">原圖</div>
+      <canvas id="srcCanvas"></canvas>
+    </div>
+    <div class="canvas-panel">
+      <div style="margin-bottom:0.5rem;font-size:0.8rem;color:var(--text-muted);">去背結果</div>
+      <div class="checker"><canvas id="outCanvas"></canvas></div>
+      <div style="margin-top:0.8rem;"><button class="btn btn-primary" id="downloadBtn" disabled>下載 PNG</button></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p><strong>AI 自動去背</strong>適合人像、物品等複雜背景的照片,效果較好但需要下載模型、處理較慢。<strong>選色去背</strong>速度快、不用下載任何東西,但只適合背景顏色單純(例如純白、純綠幕)的照片;可調整「容許誤差」讓相近的顏色一起被去除,誤差太大可能會連主體的相近顏色也一起去掉。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const canvasWrap = document.getElementById('canvasWrap');
+const srcCanvas = document.getElementById('srcCanvas');
+const outCanvas = document.getElementById('outCanvas');
+const aiControls = document.getElementById('aiControls');
+const colorControls = document.getElementById('colorControls');
+const aiRunBtn = document.getElementById('aiRunBtn');
+const colorRunBtn = document.getElementById('colorRunBtn');
+const toleranceInput = document.getElementById('toleranceInput');
+const toleranceVal = document.getElementById('toleranceVal');
+const pickedColorSwatch = document.getElementById('pickedColorSwatch');
+const downloadBtn = document.getElementById('downloadBtn');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let currentFile = null;
+let segmenterPromise = null;
+let img = null;
+let pickedColor = null; // {r,g,b}
+
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  aiControls.style.display = mode === 'ai' ? 'flex' : 'none';
+  colorControls.style.display = mode === 'color' ? 'flex' : 'none';
+}));
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = URL.createObjectURL(file);
+  });
+}
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentFile = f;
+  img = await loadImage(f);
+  fileInfo.textContent = `已載入:${f.name}(${img.naturalWidth}×${img.naturalHeight}px)`;
+  srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight;
+  srcCanvas.getContext('2d').drawImage(img, 0, 0);
+  outCanvas.width = img.naturalWidth; outCanvas.height = img.naturalHeight;
+  outCanvas.getContext('2d').clearRect(0, 0, outCanvas.width, outCanvas.height);
+  canvasWrap.style.display = 'grid';
+  aiRunBtn.disabled = false;
+  colorRunBtn.disabled = !pickedColor;
+  downloadBtn.disabled = true;
+  setStatus(statusMsg, '');
+});
+
+// ---- color picking on source canvas ----
+srcCanvas.addEventListener('click', (e) => {
+  const rect = srcCanvas.getBoundingClientRect();
+  const scaleX = srcCanvas.width / rect.width;
+  const scaleY = srcCanvas.height / rect.height;
+  const x = Math.floor((e.clientX - rect.left) * scaleX);
+  const y = Math.floor((e.clientY - rect.top) * scaleY);
+  const data = srcCanvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  pickedColor = { r: data[0], g: data[1], b: data[2] };
+  pickedColorSwatch.style.background = `rgb(${pickedColor.r},${pickedColor.g},${pickedColor.b})`;
+  colorRunBtn.disabled = false;
+});
+
+toleranceInput.addEventListener('input', () => { toleranceVal.textContent = toleranceInput.value; });
+
+// ---- color-based removal ----
+colorRunBtn.addEventListener('click', () => {
+  if (!pickedColor) return;
+  const tolerance = Number(toleranceInput.value);
+  const feather = tolerance * 0.6;
+  const ctx = srcCanvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const dr = d[i] - pickedColor.r, dg = d[i + 1] - pickedColor.g, db = d[i + 2] - pickedColor.b;
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+    if (dist < tolerance) d[i + 3] = 0;
+    else if (dist < tolerance + feather) d[i + 3] = Math.round(255 * (dist - tolerance) / feather);
+  }
+  outCanvas.width = srcCanvas.width; outCanvas.height = srcCanvas.height;
+  outCanvas.getContext('2d').putImageData(imageData, 0, 0);
+  downloadBtn.disabled = false;
+  setStatus(statusMsg, '完成:已套用選色去背');
+});
+
+// ---- AI removal ----
+aiRunBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  aiRunBtn.disabled = true;
+  setStatus(statusMsg, '載入 AI 模型中...(第一次使用需下載,請耐心等候)');
+  try {
+    if (!segmenterPromise) {
+      const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+      segmenterPromise = pipeline('background-removal', 'Xenova/modnet', {
+        progress_callback: (p) => {
+          if (p.status === 'progress') {
+            setStatus(statusMsg, `下載 AI 模型中... ${Math.round(p.progress)}%`);
+          } else {
+            setStatus(statusMsg, `準備模型中... (${p.status})`);
+          }
+        },
+      });
+    }
+    const segmenter = await segmenterPromise;
+    setStatus(statusMsg, '辨識中...');
+    const output = await segmenter(URL.createObjectURL(currentFile));
+    const resultImage = Array.isArray(output) ? output[0] : output;
+    const resultCanvas = await resultImage.toCanvas();
+    outCanvas.width = resultCanvas.width;
+    outCanvas.height = resultCanvas.height;
+    outCanvas.getContext('2d').drawImage(resultCanvas, 0, 0);
+    downloadBtn.disabled = false;
+    setStatus(statusMsg, '完成:AI 去背成功');
+  } catch (e) {
+    setStatus(statusMsg, 'AI 去背失敗:' + e.message + '(可能是網路無法下載模型,請改用選色去背或稍後再試)', true);
+  }
+  aiRunBtn.disabled = false;
+});
+
+downloadBtn.addEventListener('click', () => {
+  outCanvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const baseName = (currentFile.name || 'image').replace(/\.[^.]+$/, '');
+    a.href = url; a.download = `${baseName}-去背.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+});
+</script>
+</body>
+</html>

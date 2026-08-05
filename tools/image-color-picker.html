@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片抓色碼 | 小工具箱</title>
+<meta name="description" content="免費線上圖片抓色碼工具,滑鼠移到圖片上即時放大預覽並顯示 HEX / RGB / HSL 色碼,點擊記錄色票。">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  #pickCanvas { max-width:100%; cursor:crosshair; border-radius:8px; display:block; }
+  #canvasHolder { position:relative; display:inline-block; }
+  #magnifier {
+    position:absolute; width:100px; height:100px; border-radius:50%;
+    border:3px solid var(--surface); box-shadow:0 2px 10px rgba(0,0,0,0.35);
+    pointer-events:none; display:none; z-index:5;
+    image-rendering:pixelated; background-repeat:no-repeat;
+  }
+  .swatch-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:0.6rem; margin-top:1rem; }
+  .swatch-card { display:flex; align-items:center; gap:0.6rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.5rem; font-size:0.78rem; }
+  .swatch-color { width:32px; height:32px; border-radius:6px; border:1px solid var(--border); flex-shrink:0; }
+  .swatch-info { flex:1; overflow:hidden; }
+  .swatch-info div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片抓色碼</div>
+  <h1 class="page-title">圖片抓色碼</h1>
+  <p class="page-desc">上傳圖片,把滑鼠移到圖片上即時放大預覽並顯示色碼,點擊可以把顏色記錄到下方色票清單。全部在瀏覽器端處理,圖片不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div id="workArea" style="display:none;">
+    <div class="controls-row">
+      <label>目前顏色 <span id="currentSwatch" style="display:inline-block;width:20px;height:20px;border:1px solid var(--border);border-radius:4px;vertical-align:middle;"></span></label>
+      <span id="currentHex" style="font-family:monospace;"></span>
+      <span id="currentRgb" style="font-family:monospace;color:var(--text-muted);"></span>
+      <span id="currentHsl" style="font-family:monospace;color:var(--text-muted);"></span>
+    </div>
+
+    <div id="canvasHolder">
+      <canvas id="pickCanvas"></canvas>
+      <div id="magnifier"></div>
+    </div>
+
+    <div class="controls-row">
+      <button class="btn" id="clearSwatchesBtn">清空色票清單</button>
+    </div>
+    <div class="swatch-list" id="swatchList"></div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>滑鼠移到圖片上會放大顯示游標位置的像素,方便精確取色;點一下圖片就會把該顏色加進下方色票清單,每個色票可以直接複製 HEX 或 RGB 色碼。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const workArea = document.getElementById('workArea');
+const pickCanvas = document.getElementById('pickCanvas');
+const canvasHolder = document.getElementById('canvasHolder');
+const magnifier = document.getElementById('magnifier');
+const currentSwatch = document.getElementById('currentSwatch');
+const currentHex = document.getElementById('currentHex');
+const currentRgb = document.getElementById('currentRgb');
+const currentHsl = document.getElementById('currentHsl');
+const swatchList = document.getElementById('swatchList');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let ctx = null;
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = URL.createObjectURL(file);
+  });
+}
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  const img = await loadImage(f);
+  pickCanvas.width = img.naturalWidth;
+  pickCanvas.height = img.naturalHeight;
+  ctx = pickCanvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  workArea.style.display = 'block';
+});
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+function getPixelAt(clientX, clientY) {
+  const rect = pickCanvas.getBoundingClientRect();
+  const scaleX = pickCanvas.width / rect.width;
+  const scaleY = pickCanvas.height / rect.height;
+  const x = Math.min(pickCanvas.width - 1, Math.max(0, Math.floor((clientX - rect.left) * scaleX)));
+  const y = Math.min(pickCanvas.height - 1, Math.max(0, Math.floor((clientY - rect.top) * scaleY)));
+  const d = ctx.getImageData(x, y, 1, 1).data;
+  return { x, y, r: d[0], g: d[1], b: d[2] };
+}
+
+function updateReadout(px) {
+  const hex = rgbToHex(px.r, px.g, px.b);
+  const hsl = rgbToHsl(px.r, px.g, px.b);
+  currentSwatch.style.background = hex;
+  currentHex.textContent = hex;
+  currentRgb.textContent = `rgb(${px.r}, ${px.g}, ${px.b})`;
+  currentHsl.textContent = `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`;
+}
+
+pickCanvas.addEventListener('mousemove', (e) => {
+  if (!ctx) return;
+  const px = getPixelAt(e.clientX, e.clientY);
+  updateReadout(px);
+
+  const holderRect = canvasHolder.getBoundingClientRect();
+  magnifier.style.display = 'block';
+  magnifier.style.left = (e.clientX - holderRect.left - 50) + 'px';
+  magnifier.style.top = (e.clientY - holderRect.top - 120) + 'px';
+  const zoom = 8;
+  magnifier.style.backgroundImage = `url(${pickCanvas.toDataURL()})`;
+  magnifier.style.backgroundSize = (pickCanvas.width * zoom) + 'px ' + (pickCanvas.height * zoom) + 'px';
+  magnifier.style.backgroundPosition = `${-(px.x * zoom - 50)}px ${-(px.y * zoom - 50)}px`;
+});
+pickCanvas.addEventListener('mouseleave', () => { magnifier.style.display = 'none'; });
+
+pickCanvas.addEventListener('click', (e) => {
+  const px = getPixelAt(e.clientX, e.clientY);
+  addSwatch(px);
+});
+
+function addSwatch(px) {
+  const hex = rgbToHex(px.r, px.g, px.b);
+  const hsl = rgbToHsl(px.r, px.g, px.b);
+  const card = document.createElement('div');
+  card.className = 'swatch-card';
+  card.innerHTML = `
+    <div class="swatch-color" style="background:${hex};"></div>
+    <div class="swatch-info">
+      <div style="font-family:monospace;font-weight:600;">${hex}</div>
+      <div style="color:var(--text-muted);">rgb(${px.r}, ${px.g}, ${px.b})</div>
+      <div style="color:var(--text-muted);">hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)</div>
+    </div>
+    <button class="btn" title="複製 HEX">複製</button>
+  `;
+  card.querySelector('button').addEventListener('click', (ev) => copyText(hex, ev.target));
+  swatchList.prepend(card);
+}
+
+document.getElementById('clearSwatchesBtn').addEventListener('click', () => { swatchList.innerHTML = ''; });
+</script>
+</body>
+</html>
