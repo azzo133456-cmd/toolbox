@@ -35,13 +35,14 @@
   </div>
 
   <div class="controls-row">
+    <label><input type="checkbox" id="mergeSheetsChk"> 合併所有頁面為單一工作表(不分頁)</label>
     <button class="btn btn-primary" id="convertBtn" disabled>轉換</button>
     <button class="btn" id="downloadBtn" disabled>下載 .xlsx</button>
   </div>
   <div class="status-msg" id="statusMsg"></div>
 
   <div class="panel" id="previewPanel" style="display:none;">
-    <div class="panel-header"><span>預覽(第 1 頁)</span></div>
+    <div class="panel-header"><span id="previewLabel">預覽(第 1 頁)</span></div>
     <div style="overflow:auto;max-height:420px;">
       <table id="previewTable" style="border-collapse:collapse;width:100%;font-size:0.85rem;"></table>
     </div>
@@ -49,7 +50,7 @@
 
   <div class="info-box">
     <h4>使用說明</h4>
-    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。系統會自動找出該頁欄位最多的那一列當作「標題列」,並以標題列的欄位位置為基準,把每一列的內容對齊到最接近的欄位。由於多數 PDF 沒有真正的表格框線,極少數情況下相鄰欄位文字起始位置太接近,仍可能誤判合併,建議下載後檢查一次。</p>
+    <p>預設每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...);勾選「合併所有頁面為單一工作表」會先找出全文件中重複出現最多次的標題列,以它的欄位位置為基準比對每一頁的內容,只在最前面保留一次標題,其餘頁面的資料接續往下堆疊——適合像價目表這種同一份文件、每頁欄位結構相同的多頁文件。若文件中沒有重複出現的標題列(例如每頁欄位都不一樣),就沒有共用基準可用,會退回逐頁各自判斷。由於多數 PDF 沒有真正的表格框線,仍可能有極少數列被誤判合併或分類到錯誤欄位,建議下載後檢查一次。</p>
   </div>
 </main>
 
@@ -66,6 +67,7 @@ const chooseBtn = document.getElementById('chooseBtn');
 const fileInput = document.getElementById('fileInput');
 const fileInfo = document.getElementById('fileInfo');
 const DEFAULT_GAP_THRESHOLD = 12; // used only for pages with no detectable header row
+const mergeSheetsChk = document.getElementById('mergeSheetsChk');
 const convertBtn = document.getElementById('convertBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const statusMsg = document.getElementById('statusMsg');
@@ -130,21 +132,28 @@ function splitLineByGap(line, gapThreshold) {
   return cells;
 }
 
+// Returns { all, header, dataRows }:
+//  - all: every row on the page (preamble + header + data), for per-page sheets
+//  - header: the detected header row's cells, or null if none was found
+//  - dataRows: rows after the header only, with preamble/header stripped out,
+//    for stitching multiple pages into one continuous table
 async function extractPageRows(page, gapThreshold) {
   const content = await page.getTextContent();
   const lineMap = groupIntoLines(content);
-  if (!lineMap.length) return [];
+  if (!lineMap.length) return { all: [], header: null, dataRows: [] };
 
-  // Detect the header row as the line with the most items on the page — table
-  // headers list every column, while data rows may leave some cells blank and
-  // title/metadata lines above the table have very few items.
-  let headerIdx = 0;
-  lineMap.forEach((line, i) => { if (line.items.length > lineMap[headerIdx].items.length) headerIdx = i; });
-  const looksTabular = lineMap[headerIdx].items.length >= 3;
+  // Detect the header row as the *first* line on the page with several items —
+  // table headers always come before their data. Using "the line with the
+  // most items" instead breaks on pages where a data row's long free-text
+  // description (e.g. a product spec) happens to split into more space-
+  // separated tokens than the header row itself.
+  let headerIdx = lineMap.findIndex(l => l.items.length >= 3);
+  const looksTabular = headerIdx !== -1;
 
   if (!looksTabular) {
     // No clear column structure detected — fall back to gap-based splitting for everything.
-    return lineMap.map(line => splitLineByGap(line, gapThreshold)).filter(r => r.length);
+    const all = lineMap.map(line => splitLineByGap(line, gapThreshold)).filter(r => r.length);
+    return { all, header: null, dataRows: all };
   }
 
   const headerItems = lineMap[headerIdx].items;
@@ -164,7 +173,9 @@ async function extractPageRows(page, gapThreshold) {
     return best;
   }
 
-  const rows = lineMap.map((line, idx) => {
+  let headerRow = null;
+  const dataRows = [];
+  const all = lineMap.map((line, idx) => {
     if (idx < headerIdx) {
       // Preamble lines (titles, date ranges) sit above the table — keep them
       // as a single cell instead of forcing them into the column grid.
@@ -175,10 +186,70 @@ async function extractPageRows(page, gapThreshold) {
       const ci = columnIndexFor(it.x + (it.endX - it.x) / 2);
       cells[ci] = cells[ci] ? cells[ci] + ' ' + it.str : it.str;
     });
+    if (idx === headerIdx) headerRow = cells;
+    else if (idx > headerIdx && cells.some(c => c !== '')) dataRows.push(cells);
     return cells;
   }).filter(r => r.some(c => c !== ''));
 
-  return rows;
+  return { all, header: headerRow, dataRows };
+}
+
+// Real multi-page exports (price lists, catalogs) often only print the column
+// header on the page where a section starts, not on every continuation page —
+// so per-page header detection above picks a *data* row as the "header" on
+// every page that doesn't have one. For merge mode we instead scan the whole
+// document up front for the header text that repeats most often, then reuse
+// that single header's column positions as fixed anchors for every page.
+function firstMultiItemLine(lineMap) {
+  return lineMap.find(l => l.items.length >= 3) || null;
+}
+
+async function findCanonicalHeader(pdfDoc) {
+  const counts = new Map(); // textKey -> { count, items }
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const content = await page.getTextContent();
+    const lineMap = groupIntoLines(content);
+    const line = firstMultiItemLine(lineMap);
+    if (!line) continue;
+    const key = line.items.map(it => it.str).join('|');
+    const entry = counts.get(key);
+    if (entry) entry.count++;
+    else counts.set(key, { count: 1, items: line.items });
+  }
+  let best = null;
+  counts.forEach(entry => { if (!best || entry.count > best.count) best = entry; });
+  return best && best.count >= 2 ? best.items : null; // require it to repeat at least once
+}
+
+// Extracts a page's rows using a *fixed* set of header items shared across the
+// whole document (see findCanonicalHeader), instead of re-detecting a header
+// on this page alone. Lines with a single item are treated as non-table
+// preamble (section titles etc.) and excluded from dataRows.
+function extractPageRowsWithAnchor(lineMap, anchorItems) {
+  const anchorCenters = anchorItems.map(it => it.x + (it.endX - it.x) / 2);
+  const anchorKey = anchorItems.map(it => it.str).join('|');
+  function columnIndexFor(itemCenter) {
+    let best = 0, bestDist = Infinity;
+    anchorCenters.forEach((c, i) => {
+      const d = Math.abs(itemCenter - c);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
+  }
+  const dataRows = [];
+  lineMap.forEach(line => {
+    if (line.items.length < 3) return; // section titles / form fields / preamble — skip in merged output
+    const key = line.items.map(it => it.str).join('|');
+    if (key === anchorKey) return; // this page's own copy of the header — already represented once
+    const cells = new Array(anchorItems.length).fill('');
+    line.items.forEach(it => {
+      const ci = columnIndexFor(it.x + (it.endX - it.x) / 2);
+      cells[ci] = cells[ci] ? cells[ci] + ' ' + it.str : it.str;
+    });
+    if (cells.some(c => c !== '')) dataRows.push(cells);
+  });
+  return dataRows;
 }
 
 function renderPreview(rows) {
@@ -200,13 +271,38 @@ convertBtn.addEventListener('click', async () => {
   if (!pdfDoc) return;
   convertBtn.disabled = true;
   sheetsData = [];
+  const merge = mergeSheetsChk.checked;
   try {
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      setStatus(statusMsg, `轉換中... (${i}/${pdfDoc.numPages} 頁)`);
-      const page = await pdfDoc.getPage(i);
-      const rows = await extractPageRows(page, DEFAULT_GAP_THRESHOLD);
-      sheetsData.push({ name: `頁${i}`, rows });
+    if (merge) {
+      setStatus(statusMsg, '尋找共用標題列...');
+      const anchorItems = await findCanonicalHeader(pdfDoc);
+      const mergedRows = [];
+      if (anchorItems) mergedRows.push(anchorItems.map(it => it.str));
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        setStatus(statusMsg, `轉換中... (${i}/${pdfDoc.numPages} 頁)`);
+        const page = await pdfDoc.getPage(i);
+        const content = await page.getTextContent();
+        const lineMap = groupIntoLines(content);
+        if (anchorItems) {
+          mergedRows.push(...extractPageRowsWithAnchor(lineMap, anchorItems));
+        } else {
+          // No header repeats anywhere in the document — nothing reliable to
+          // anchor columns to, so fall back to each page's own best guess.
+          const result = await extractPageRows(page, DEFAULT_GAP_THRESHOLD);
+          mergedRows.push(...result.all);
+        }
+      }
+      sheetsData = [{ name: currentName.slice(0, 31) || 'Sheet1', rows: mergedRows }];
+    } else {
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        setStatus(statusMsg, `轉換中... (${i}/${pdfDoc.numPages} 頁)`);
+        const page = await pdfDoc.getPage(i);
+        const result = await extractPageRows(page, DEFAULT_GAP_THRESHOLD);
+        sheetsData.push({ name: `頁${i}`, rows: result.all });
+      }
     }
+
+    document.getElementById('previewLabel').textContent = merge ? '預覽(合併後前 30 列)' : '預覽(第 1 頁)';
     renderPreview(sheetsData[0] ? sheetsData[0].rows : []);
     const totalRows = sheetsData.reduce((s, d) => s + d.rows.length, 0);
     setStatus(statusMsg, `轉換完成:共 ${pdfDoc.numPages} 頁,${totalRows} 列資料`);
