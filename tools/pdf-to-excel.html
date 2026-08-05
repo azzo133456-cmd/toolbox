@@ -25,7 +25,7 @@
 <main>
   <div class="breadcrumb"><a href="../index.html">首頁</a> / PDF 轉 Excel</div>
   <h1 class="page-title">PDF 轉 Excel</h1>
-  <p class="page-desc">上傳 PDF,擷取文字內容並依欄位間距自動推算表格欄位,匯出成 .xlsx。適合欄位對齊清楚的表格類 PDF;掃描圖檔 PDF、複雜合併儲存格或無明顯欄位間距的版面無法完美還原,建議下載後人工校對。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+  <p class="page-desc">上傳 PDF,擷取文字內容並自動推算表格欄位,匯出成 .xlsx。適合有標題列的表格類 PDF(發票、明細表等);掃描圖檔 PDF、複雜合併儲存格或完全無標題列的版面無法完美還原,建議下載後人工校對。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
 
   <div class="controls-row">
     <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
@@ -34,7 +34,7 @@
   </div>
 
   <div class="controls-row">
-    <label>欄位偵測靈敏度(數值越大,判定為新欄位所需的間距越大)
+    <label>備援欄位偵測靈敏度(僅用於偵測不到標題列時,數值越大越不容易被切成新欄位)
       <input type="number" id="gapInput" value="12" min="2" max="60" style="width:80px;">
     </label>
     <button class="btn btn-primary" id="convertBtn" disabled>轉換</button>
@@ -51,7 +51,7 @@
 
   <div class="info-box">
     <h4>使用說明</h4>
-    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。如果轉出來的欄位切得太細或太少,可以調整「欄位偵測靈敏度」數值後重新轉換:數值越大越不容易被切成新欄位。</p>
+    <p>每一頁 PDF 會轉成一個 Excel 工作表(頁1、頁2...)。系統會自動找出該頁欄位最多的那一列當作「標題列」,並以標題列的欄位位置為基準,把每一列的內容對齊到最接近的欄位。若某一頁完全偵測不到標題列(欄位數過少),才會改用「備援欄位偵測靈敏度」的間距規則切欄。由於多數 PDF 沒有真正的表格框線,極少數情況下相鄰欄位文字起始位置太接近,仍可能誤判合併,建議下載後檢查一次。</p>
   </div>
 </main>
 
@@ -96,48 +96,86 @@ fileInput.addEventListener('change', async () => {
   }
 });
 
-async function extractPageRows(page, gapThreshold) {
-  const content = await page.getTextContent();
-  // group items into lines by y coordinate
+function groupIntoLines(content) {
   const lineMap = [];
   content.items.forEach(item => {
-    if (item.str === '') return;
+    if (item.str === '' || !item.str.trim()) return; // skip pdf.js's synthetic space fillers
     const y = Math.round(item.transform[5]);
     const x = item.transform[4];
     let line = lineMap.find(l => Math.abs(l.y - y) <= 2);
     if (!line) { line = { y, items: [] }; lineMap.push(line); }
-    line.items.push({ x, endX: x + item.width, str: item.str, isSpace: !item.str.trim() });
+    line.items.push({ x, endX: x + item.width, str: item.str });
   });
+  lineMap.forEach(line => line.items.sort((a, b) => a.x - b.x));
   lineMap.sort((a, b) => b.y - a.y); // top to bottom (PDF y grows upward)
+  return lineMap;
+}
 
-  // pdf.js synthesizes oversized "space" items that stretch across the whole
-  // visual gap between two real text runs, so their own width can't be used
-  // to extend the "last real end" position — only real (non-space) items can.
-  const rows = lineMap.map(line => {
-    line.items.sort((a, b) => a.x - b.x);
-    const cells = [];
-    let cur = '';
-    let lastRealEndX = null;
+// Gap-based fallback: walk items left to right, start a new cell whenever the
+// horizontal gap to the previous item exceeds the threshold. Works for loose
+// text but misreads real tables whose column gaps vary column to column.
+function splitLineByGap(line, gapThreshold) {
+  const cells = [];
+  let cur = '';
+  let lastEndX = null;
+  line.items.forEach(it => {
+    if (lastEndX !== null && (it.x - lastEndX) > gapThreshold) {
+      if (cur.trim() !== '') cells.push(cur.trim());
+      cur = it.str;
+    } else {
+      cur += (cur ? ' ' : '') + it.str;
+    }
+    lastEndX = it.endX;
+  });
+  if (cur.trim() !== '') cells.push(cur.trim());
+  return cells;
+}
+
+async function extractPageRows(page, gapThreshold) {
+  const content = await page.getTextContent();
+  const lineMap = groupIntoLines(content);
+  if (!lineMap.length) return [];
+
+  // Detect the header row as the line with the most items on the page — table
+  // headers list every column, while data rows may leave some cells blank and
+  // title/metadata lines above the table have very few items.
+  let headerIdx = 0;
+  lineMap.forEach((line, i) => { if (line.items.length > lineMap[headerIdx].items.length) headerIdx = i; });
+  const looksTabular = lineMap[headerIdx].items.length >= 3;
+
+  if (!looksTabular) {
+    // No clear column structure detected — fall back to gap-based splitting for everything.
+    return lineMap.map(line => splitLineByGap(line, gapThreshold)).filter(r => r.length);
+  }
+
+  const headerItems = lineMap[headerIdx].items;
+  // Column boundaries sit at the midpoint between each header label's end and
+  // the next one's start. Assigning by boundary (not nearest-anchor-start)
+  // matters because numeric cells are often right-aligned within a narrow
+  // column, landing closer to the *next* header's start x than their own.
+  const boundaries = [];
+  for (let i = 0; i < headerItems.length - 1; i++) {
+    boundaries.push((headerItems[i].endX + headerItems[i + 1].x) / 2);
+  }
+  function columnIndexFor(x) {
+    let idx = 0;
+    while (idx < boundaries.length && x >= boundaries[idx]) idx++;
+    return idx;
+  }
+
+  const rows = lineMap.map((line, idx) => {
+    if (idx < headerIdx) {
+      // Preamble lines (titles, date ranges) sit above the table — keep them
+      // as a single cell instead of forcing them into the column grid.
+      return [line.items.map(it => it.str).join(' ')];
+    }
+    const cells = new Array(headerItems.length).fill('');
     line.items.forEach(it => {
-      if (it.isSpace) {
-        if (it.endX - it.x > gapThreshold) {
-          if (cur.trim() !== '') { cells.push(cur.trim()); cur = ''; }
-        } else {
-          cur += ' ';
-        }
-        return;
-      }
-      if (lastRealEndX !== null && (it.x - lastRealEndX) > gapThreshold) {
-        if (cur.trim() !== '') cells.push(cur.trim());
-        cur = it.str;
-      } else {
-        cur += it.str;
-      }
-      lastRealEndX = it.endX;
+      const ci = columnIndexFor(it.x);
+      cells[ci] = cells[ci] ? cells[ci] + ' ' + it.str : it.str;
     });
-    if (cur.trim() !== '') cells.push(cur.trim());
     return cells;
-  }).filter(r => r.length && r.some(c => c !== ''));
+  }).filter(r => r.some(c => c !== ''));
 
   return rows;
 }
