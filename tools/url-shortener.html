@@ -26,7 +26,7 @@
   <p class="page-desc">把長網址轉成好分享的短網址。</p>
 
   <div class="ad-slot" style="border-color:var(--accent);color:var(--text);text-align:left;">
-    ⚠️ 這個工具跟其他工具不同:短網址需要有伺服器記住「短網址 → 原網址」的對應關係,才能讓任何人點擊都連得到。本工具串接第三方免費服務 <a href="https://is.gd" target="_blank" rel="noopener noreferrer">is.gd</a> 產生短網址,<strong>你輸入的網址會傳送給 is.gd</strong>,不是像本站其他工具一樣完全只在你的瀏覽器裡處理。請避免用來縮短含有個人隱私參數的網址。
+    ⚠️ 這個工具跟其他工具不同:短網址需要有伺服器記住「短網址 → 原網址」的對應關係,才能讓任何人點擊都連得到。本工具透過自架的中繼服務,轉呼叫 <a href="https://tinyurl.com" target="_blank" rel="noopener noreferrer">TinyURL</a>(自訂短碼時改用 <a href="https://is.gd" target="_blank" rel="noopener noreferrer">is.gd</a>)產生短網址,<strong>你輸入的網址會經過這些服務</strong>,不是像本站其他工具一樣完全只在你的瀏覽器裡處理。請避免用來縮短含有個人隱私參數的網址。
   </div>
 
   <div class="controls-row" style="flex-wrap:wrap;">
@@ -52,7 +52,7 @@
 
   <div class="info-box">
     <h4>使用說明</h4>
-    <p>自訂短碼並非每次都能成功(可能已被其他人使用),失敗時請換一個短碼或留空讓系統自動產生。短網址服務由 is.gd 提供,長期可用性與轉址速度不受本站控制。</p>
+    <p>留空短碼時使用 TinyURL,穩定性較高;自訂短碼目前透過 is.gd 產生,偶爾可能因對方服務忙碌而失敗(可換個短碼或稍後再試,也可能已被其他人使用)。短網址的長期可用性與轉址速度不受本站控制。</p>
   </div>
 </main>
 
@@ -86,33 +86,24 @@ shortenBtn.addEventListener('click', async () => {
   resultPanel.style.display = 'none';
   setStatus(statusMsg, '產生中...');
 
-  const params = new URLSearchParams({ format: 'json', url });
+  const API_BASE = 'https://toolbox-api-production-eb38.up.railway.app';
+  const params = new URLSearchParams({ url });
   const customCode = customCodeInput.value.trim();
-  if (customCode) params.set('shorturl', customCode);
+  if (customCode) params.set('code', customCode);
 
-  const maxAttempts = 3;
-  let lastError = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetch('https://is.gd/create.php?' + params.toString());
-      const data = await res.json();
-      if (data.errormessage) {
-        setStatus(statusMsg, '產生失敗:' + data.errormessage, true);
-      } else {
-        resultLink.href = data.shorturl;
-        resultLink.textContent = data.shorturl;
-        resultPanel.style.display = 'block';
-        setStatus(statusMsg, '產生成功');
-      }
-      lastError = null;
-      break;
-    } catch (e) {
-      lastError = e;
-      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 600 * attempt));
+  try {
+    const res = await fetch(API_BASE + '/shorten?' + params.toString());
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setStatus(statusMsg, '產生失敗:' + (data.error || res.statusText), true);
+    } else {
+      resultLink.href = data.shorturl;
+      resultLink.textContent = data.shorturl;
+      resultPanel.style.display = 'block';
+      setStatus(statusMsg, '產生成功');
     }
-  }
-  if (lastError) {
-    setStatus(statusMsg, '連線失敗,已重試 ' + maxAttempts + ' 次,請稍後再試(' + lastError.message + ')', true);
+  } catch (e) {
+    setStatus(statusMsg, '連線失敗,請稍後再試(' + e.message + ')', true);
   }
   shortenBtn.disabled = false;
 });
