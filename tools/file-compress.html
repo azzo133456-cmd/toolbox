@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>檔案壓縮 / 解壓縮 (ZIP) | 小工具箱</title>
+<meta name="description" content="免費線上檔案壓縮解壓縮工具,把多個檔案打包成 ZIP 下載,或上傳 ZIP 解壓縮取出檔案,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 檔案壓縮 / 解壓縮</div>
+  <h1 class="page-title">檔案壓縮 / 解壓縮(ZIP)</h1>
+  <p class="page-desc">把多個檔案打包成 ZIP 下載,或上傳 ZIP 檔案解壓縮取出內容。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="compress" checked> 壓縮成 ZIP</label>
+    <label><input type="radio" name="mode" value="decompress"> 解壓縮 ZIP</label>
+  </div>
+
+  <!-- Compress panel -->
+  <div id="compressPanel">
+    <div class="controls-row">
+      <button class="btn btn-primary" id="addFilesBtn">➕ 新增檔案</button>
+      <input type="file" id="fileInput" multiple style="display:none;">
+      <button class="btn" id="clearAllBtn">清空全部</button>
+    </div>
+    <div id="fileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
+      <div class="panel-header"><span>待壓縮檔案</span></div>
+      <div id="fileList" style="padding:0.5rem;"></div>
+    </div>
+    <div class="controls-row">
+      <label>壓縮檔名稱
+        <input type="text" id="zipNameInput" value="archive" style="width:200px;"> .zip
+      </label>
+      <button class="btn btn-primary" id="compressBtn" disabled>壓縮並下載</button>
+    </div>
+  </div>
+
+  <!-- Decompress panel -->
+  <div id="decompressPanel" style="display:none;">
+    <div class="controls-row">
+      <button class="btn btn-primary" id="chooseZipBtn">選擇 ZIP 檔案</button>
+      <input type="file" id="zipInput" accept=".zip" style="display:none;">
+      <span id="zipInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    </div>
+    <div id="extractListWrap" class="panel" style="display:none;">
+      <div class="panel-header">
+        <span>壓縮檔內容</span>
+        <div class="actions"><button class="btn btn-primary" id="downloadAllBtn">全部下載</button></div>
+      </div>
+      <div id="extractList" style="padding:0.5rem;"></div>
+    </div>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>壓縮時可一次選取多個檔案打包成一個 ZIP;解壓縮時上傳 ZIP 後可個別下載每個檔案,或按「全部下載」逐一觸發下載。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const statusMsg = document.getElementById('statusMsg');
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+// ---- mode switch ----
+const compressPanel = document.getElementById('compressPanel');
+const decompressPanel = document.getElementById('decompressPanel');
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  compressPanel.style.display = mode === 'compress' ? 'block' : 'none';
+  decompressPanel.style.display = mode === 'decompress' ? 'block' : 'none';
+  setStatus(statusMsg, '');
+}));
+
+// ---- compress ----
+const addFilesBtn = document.getElementById('addFilesBtn');
+const fileInput = document.getElementById('fileInput');
+const fileListWrap = document.getElementById('fileListWrap');
+const fileList = document.getElementById('fileList');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const compressBtn = document.getElementById('compressBtn');
+const zipNameInput = document.getElementById('zipNameInput');
+
+let pendingFiles = [];
+
+function renderFileList() {
+  fileListWrap.style.display = pendingFiles.length ? 'block' : 'none';
+  compressBtn.disabled = pendingFiles.length === 0;
+  fileList.innerHTML = '';
+  pendingFiles.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.3rem;border-bottom:1px solid var(--border);font-size:0.88rem;';
+    row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span><span style="color:var(--text-muted);">${fmtSize(f.size)}</span><button class="btn" data-idx="${idx}">✕</button>`;
+    fileList.appendChild(row);
+  });
+}
+
+fileList.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  pendingFiles.splice(Number(btn.dataset.idx), 1);
+  renderFileList();
+});
+
+addFilesBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  Array.from(fileInput.files).forEach(f => pendingFiles.push(f));
+  fileInput.value = '';
+  renderFileList();
+});
+clearAllBtn.addEventListener('click', () => { pendingFiles = []; renderFileList(); setStatus(statusMsg, ''); });
+
+compressBtn.addEventListener('click', async () => {
+  compressBtn.disabled = true;
+  setStatus(statusMsg, '壓縮中...');
+  try {
+    const zip = new JSZip();
+    for (const f of pendingFiles) {
+      zip.file(f.name, await f.arrayBuffer());
+    }
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const name = (zipNameInput.value.trim() || 'archive') + '.zip';
+    downloadBlob(blob, name);
+    setStatus(statusMsg, `壓縮完成:${pendingFiles.length} 個檔案,大小 ${fmtSize(blob.size)}`);
+  } catch (e) {
+    setStatus(statusMsg, '壓縮失敗:' + e.message, true);
+  }
+  compressBtn.disabled = pendingFiles.length === 0;
+});
+
+// ---- decompress ----
+const chooseZipBtn = document.getElementById('chooseZipBtn');
+const zipInput = document.getElementById('zipInput');
+const zipInfo = document.getElementById('zipInfo');
+const extractListWrap = document.getElementById('extractListWrap');
+const extractList = document.getElementById('extractList');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+let loadedZip = null;
+
+chooseZipBtn.addEventListener('click', () => zipInput.click());
+zipInput.addEventListener('change', async () => {
+  const f = zipInput.files[0];
+  if (!f) return;
+  setStatus(statusMsg, '讀取中...');
+  try {
+    loadedZip = await JSZip.loadAsync(f);
+    zipInfo.textContent = `已載入:${f.name}`;
+    const entries = Object.values(loadedZip.files).filter(e => !e.dir);
+    extractList.innerHTML = '';
+    entries.forEach(entry => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.3rem;border-bottom:1px solid var(--border);font-size:0.88rem;';
+      row.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.name}</span><button class="btn">下載</button>`;
+      row.querySelector('button').addEventListener('click', async () => {
+        const blob = await entry.async('blob');
+        downloadBlob(blob, entry.name.split('/').pop());
+      });
+      extractList.appendChild(row);
+    });
+    extractListWrap.style.display = 'block';
+    setStatus(statusMsg, `共 ${entries.length} 個檔案`);
+  } catch (e) {
+    setStatus(statusMsg, '讀取 ZIP 失敗:' + e.message, true);
+  }
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+  if (!loadedZip) return;
+  const entries = Object.values(loadedZip.files).filter(e => !e.dir);
+  for (const entry of entries) {
+    const blob = await entry.async('blob');
+    downloadBlob(blob, entry.name.split('/').pop());
+    await new Promise(r => setTimeout(r, 150));
+  }
+});
+</script>
+</body>
+</html>

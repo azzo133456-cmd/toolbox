@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 合併 | 小工具箱</title>
+<meta name="description" content="免費線上 PDF 合併工具,上傳多個 PDF 檔案,調整順序後合併成一份 PDF 下載,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / PDF 合併</div>
+  <h1 class="page-title">PDF 合併</h1>
+  <p class="page-desc">上傳多個 PDF 檔案,調整順序後合併成一份 PDF,全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <button class="btn btn-primary" id="addFilesBtn">➕ 新增 PDF 檔案</button>
+    <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none;">
+    <button class="btn" id="clearAllBtn">清空全部</button>
+  </div>
+
+  <div id="fileListWrap" class="panel" style="display:none;margin-bottom:1rem;">
+    <div class="panel-header"><span>檔案順序(合併順序由上到下)</span></div>
+    <div id="fileList" style="padding:0.5rem;"></div>
+  </div>
+
+  <div class="controls-row">
+    <button class="btn btn-primary" id="mergeBtn" disabled>合併並下載</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>可一次選取多個 PDF 檔案,或分批新增。用「↑ ↓」調整合併順序,「✕」移除單一檔案。合併後的檔案會自動下載為 <code>merged.pdf</code>。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const addFilesBtn = document.getElementById('addFilesBtn');
+const fileInput = document.getElementById('fileInput');
+const fileListWrap = document.getElementById('fileListWrap');
+const fileList = document.getElementById('fileList');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const mergeBtn = document.getElementById('mergeBtn');
+const statusMsg = document.getElementById('statusMsg');
+
+let files = []; // {name, buffer}
+
+function renderList() {
+  fileListWrap.style.display = files.length ? 'block' : 'none';
+  mergeBtn.disabled = files.length < 2;
+  fileList.innerHTML = '';
+  files.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.3rem;border-bottom:1px solid var(--border);';
+    row.innerHTML = `
+      <span style="flex:1;font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${idx + 1}. ${f.name}</span>
+      <button class="btn" data-act="up" data-idx="${idx}">↑</button>
+      <button class="btn" data-act="down" data-idx="${idx}">↓</button>
+      <button class="btn" data-act="remove" data-idx="${idx}">✕</button>
+    `;
+    fileList.appendChild(row);
+  });
+}
+
+fileList.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const idx = Number(btn.dataset.idx);
+  const act = btn.dataset.act;
+  if (act === 'remove') files.splice(idx, 1);
+  if (act === 'up' && idx > 0) [files[idx - 1], files[idx]] = [files[idx], files[idx - 1]];
+  if (act === 'down' && idx < files.length - 1) [files[idx + 1], files[idx]] = [files[idx], files[idx + 1]];
+  renderList();
+});
+
+addFilesBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  for (const f of fileInput.files) {
+    const buffer = await f.arrayBuffer();
+    files.push({ name: f.name, buffer });
+  }
+  fileInput.value = '';
+  renderList();
+});
+
+clearAllBtn.addEventListener('click', () => { files = []; renderList(); setStatus(statusMsg, ''); });
+
+mergeBtn.addEventListener('click', async () => {
+  setStatus(statusMsg, '合併中...');
+  mergeBtn.disabled = true;
+  try {
+    const { PDFDocument } = PDFLib;
+    const merged = await PDFDocument.create();
+    for (const f of files) {
+      const src = await PDFDocument.load(f.buffer);
+      const pages = await merged.copyPages(src, src.getPageIndices());
+      pages.forEach(p => merged.addPage(p));
+    }
+    const bytes = await merged.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'merged.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    setStatus(statusMsg, `合併完成:共 ${files.length} 份檔案`);
+  } catch (e) {
+    setStatus(statusMsg, '合併失敗:' + e.message, true);
+  }
+  mergeBtn.disabled = files.length < 2;
+});
+</script>
+</body>
+</html>

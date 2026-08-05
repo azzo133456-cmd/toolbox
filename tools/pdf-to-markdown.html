@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 轉 Markdown | 小工具箱</title>
+<meta name="description" content="免費線上 PDF 轉 Markdown 工具,擷取 PDF 文字內容並轉成 Markdown 格式,檔案不上傳伺服器。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+      <a href="../index.html#files">檔案處理</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / PDF 轉 Markdown</div>
+  <h1 class="page-title">PDF 轉 Markdown</h1>
+  <p class="page-desc">上傳 PDF,擷取內含文字並轉成 Markdown。適合純文字或報告類 PDF;掃描圖檔 PDF、複雜表格與版面無法完美還原。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <button class="btn btn-primary" id="chooseBtn">選擇 PDF 檔案</button>
+    <input type="file" id="fileInput" accept="application/pdf" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <label style="margin-left:auto;"><input type="checkbox" id="pageHeadingChk" checked> 每頁加上標題</label>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>Markdown 輸出</span>
+      <div class="actions">
+        <button class="btn" id="copyOutput">複製</button>
+        <button class="btn btn-primary" id="downloadOutput">下載 .md</button>
+      </div>
+    </div>
+    <pre id="outputArea" style="min-height:360px;"></pre>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>本工具只擷取 PDF 中的可選取文字,並依段落與頁面分段整理成 Markdown;圖片、表格線條、掃描版 PDF(圖片型文字)無法轉換。若需要更精準的排版還原,建議搭配人工校對。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const outputArea = document.getElementById('outputArea');
+const pageHeadingChk = document.getElementById('pageHeadingChk');
+let currentName = 'document';
+
+async function extractPageText(page) {
+  const content = await page.getTextContent();
+  const lines = [];
+  let currentLine = [];
+  let lastY = null;
+  content.items.forEach(item => {
+    const y = item.transform[5];
+    if (lastY !== null && Math.abs(y - lastY) > 2) {
+      lines.push(currentLine.join(''));
+      currentLine = [];
+    }
+    currentLine.push(item.str);
+    if (item.hasEOL) {
+      lines.push(currentLine.join(''));
+      currentLine = [];
+    }
+    lastY = y;
+  });
+  if (currentLine.length) lines.push(currentLine.join(''));
+  // group consecutive non-empty lines into paragraphs
+  const paragraphs = [];
+  let buf = [];
+  lines.forEach(l => {
+    if (l.trim() === '') { if (buf.length) { paragraphs.push(buf.join(' ')); buf = []; } }
+    else buf.push(l.trim());
+  });
+  if (buf.length) paragraphs.push(buf.join(' '));
+  return paragraphs.join('\n\n');
+}
+
+chooseBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentName = f.name.replace(/\.pdf$/i, '');
+  fileInfo.textContent = `已載入:${f.name}`;
+  outputArea.textContent = '';
+  setStatus(statusMsg, '轉換中...');
+  try {
+    const buffer = await f.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const parts = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      setStatus(statusMsg, `轉換中... (${i}/${doc.numPages} 頁)`);
+      const page = await doc.getPage(i);
+      const text = await extractPageText(page);
+      if (pageHeadingChk.checked) parts.push(`## 第 ${i} 頁\n\n${text}`);
+      else parts.push(text);
+    }
+    outputArea.textContent = parts.join('\n\n---\n\n');
+    setStatus(statusMsg, `轉換完成:共 ${doc.numPages} 頁`);
+  } catch (e) {
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+});
+
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.textContent, e.target));
+document.getElementById('downloadOutput').addEventListener('click', () => downloadText(currentName + '.md', outputArea.textContent));
+</script>
+</body>
+</html>
