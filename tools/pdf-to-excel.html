@@ -151,18 +151,20 @@ async function extractPageRows(page, gapThreshold) {
   }
 
   const headerItems = lineMap[headerIdx].items;
-  // Column boundaries sit at the midpoint between each header label's end and
-  // the next one's start. Assigning by boundary (not nearest-anchor-start)
-  // matters because numeric cells are often right-aligned within a narrow
-  // column, landing closer to the *next* header's start x than their own.
-  const boundaries = [];
-  for (let i = 0; i < headerItems.length - 1; i++) {
-    boundaries.push((headerItems[i].endX + headerItems[i + 1].x) / 2);
-  }
-  function columnIndexFor(x) {
-    let idx = 0;
-    while (idx < boundaries.length && x >= boundaries[idx]) idx++;
-    return idx;
+  const headerCenters = headerItems.map(it => it.x + (it.endX - it.x) / 2);
+  // Assign each data item to the header whose horizontal *center* is nearest
+  // to the item's own center. Neither pure "nearest start x" nor "midpoint
+  // boundary" works for every column: right-aligned numeric columns cluster
+  // near the next header's start, while some headers render narrower/offset
+  // from where their column's data actually begins. Comparing centers is a
+  // reasonable middle ground that held up across every case tested.
+  function columnIndexFor(itemCenter) {
+    let best = 0, bestDist = Infinity;
+    headerCenters.forEach((c, i) => {
+      const d = Math.abs(itemCenter - c);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
   }
 
   const rows = lineMap.map((line, idx) => {
@@ -173,7 +175,7 @@ async function extractPageRows(page, gapThreshold) {
     }
     const cells = new Array(headerItems.length).fill('');
     line.items.forEach(it => {
-      const ci = columnIndexFor(it.x);
+      const ci = columnIndexFor(it.x + (it.endX - it.x) / 2);
       cells[ci] = cells[ci] ? cells[ci] + ' ' + it.str : it.str;
     });
     return cells;
