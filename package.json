@@ -4,9 +4,11 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:blog": "node scripts/build-blog.js && node scripts/build-sitemap.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "marked": "^18.0.9"
   }
 }

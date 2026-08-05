@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文章 | 小工具箱</title>
+<meta name="description" content="小工具箱的教學文章,涵蓋格式轉換、圖片處理、PDF 工具等實用技巧。">
+<link rel="stylesheet" href="../css/style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "CollectionPage",
+      "name": "文章",
+      "url": "https://toolboxspot.com/blog/index.html",
+      "inLanguage": "zh-Hant"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "首頁",
+          "item": "https://toolboxspot.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "文章",
+          "item": "https://toolboxspot.com/blog/index.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#text">文字工具</a>
+      <a href="../index.html#numbers">數值/時間</a>
+      <a href="../blog/index.html">文章</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / <a href="../blog/index.html">文章</a></div>
+  <h1 class="page-title">文章</h1>
+  <p class="page-desc">工具使用教學與實用技巧,幫你更快解決問題。</p>
+  <ul class="blog-list">
+    <li>
+      <h3><a href="csv-to-json.html">如何免費把 CSV 轉成 JSON?3 步驟線上教學</a></h3>
+      <p class="article-meta">2026-08-06</p>
+      <p>不用寫程式,3 步驟把 CSV 表格轉成 JSON 格式,資料全程在瀏覽器處理不上傳伺服器,適合工程師測試資料或串接 API 使用。</p>
+    </li>
+  </ul>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>
