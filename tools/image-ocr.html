@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片文字辨識 OCR | 小工具箱</title>
+<meta name="description" content="免費線上圖片文字辨識(OCR)工具,支援繁體中文、簡體中文、英文等語言,從圖片擷取文字,可複製或下載。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片文字辨識 OCR</div>
+  <h1 class="page-title">圖片文字辨識 OCR</h1>
+  <p class="page-desc">上傳含有文字的圖片(照片、截圖、掃描件),自動辨識並擷取文字內容。全部在瀏覽器端處理,圖片不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div class="controls-row">
+    <label>辨識語言
+      <select id="langSelect">
+        <option value="chi_tra+eng" selected>繁體中文 + 英文</option>
+        <option value="chi_sim+eng">簡體中文 + 英文</option>
+        <option value="eng">英文</option>
+        <option value="jpn">日文</option>
+        <option value="kor">韓文</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="runBtn" disabled>開始辨識</button>
+    <span style="font-size:0.8rem;color:var(--text-muted);">第一次使用該語言需下載辨識模型,依網路速度可能需要一段時間</span>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+  <div id="progressWrap" style="display:none;margin:0.5rem 0;">
+    <div style="background:var(--border);border-radius:99px;height:8px;overflow:hidden;">
+      <div id="progressBar" style="background:var(--accent, #4a7dff);height:100%;width:0%;transition:width .2s;"></div>
+    </div>
+  </div>
+
+  <div class="workspace" id="resultWrap" style="display:none;">
+    <div class="panel">
+      <div class="panel-header"><span>原圖</span></div>
+      <div style="padding:1rem;text-align:center;">
+        <img id="previewImg" style="max-width:100%;max-height:420px;border-radius:8px;">
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span>辨識結果</span>
+        <div class="actions">
+          <button class="btn" id="copyOutput">複製</button>
+          <button class="btn btn-primary" id="downloadOutput">下載 .txt</button>
+        </div>
+      </div>
+      <textarea id="outputArea" style="min-height:420px;" placeholder="辨識結果會顯示在這裡,可直接編輯修正"></textarea>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>辨識引擎為開源的 <strong>Tesseract.js</strong>,適合印刷體、清晰的文字圖片;手寫字、模糊或傾斜角度過大的圖片辨識率會較低。若文字混合多種語言,可選擇對應的語言組合(例如「繁體中文 + 英文」)以提升準確度。辨識結果可直接在文字框中編輯修正後再複製或下載。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const statusMsg = document.getElementById('statusMsg');
+const langSelect = document.getElementById('langSelect');
+const runBtn = document.getElementById('runBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const resultWrap = document.getElementById('resultWrap');
+const previewImg = document.getElementById('previewImg');
+const outputArea = document.getElementById('outputArea');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let currentFile = null;
+let currentName = 'ocr-result';
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentFile = f;
+  currentName = f.name.replace(/\.[^.]+$/, '') || 'ocr-result';
+  fileInfo.textContent = `已載入:${f.name}(${(f.size / 1024).toFixed(1)} KB)`;
+  previewImg.src = URL.createObjectURL(f);
+  resultWrap.style.display = 'grid';
+  outputArea.value = '';
+  runBtn.disabled = false;
+  setStatus(statusMsg, '');
+});
+
+runBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  runBtn.disabled = true;
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  setStatus(statusMsg, '準備辨識引擎中...');
+  try {
+    const result = await Tesseract.recognize(currentFile, langSelect.value, {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          progressBar.style.width = Math.round(m.progress * 100) + '%';
+          setStatus(statusMsg, `辨識中... ${Math.round(m.progress * 100)}%`);
+        } else if (m.status) {
+          setStatus(statusMsg, statusLabel(m.status));
+        }
+      },
+    });
+    outputArea.value = result.data.text.trim();
+    progressBar.style.width = '100%';
+    setStatus(statusMsg, '辨識完成');
+  } catch (e) {
+    setStatus(statusMsg, '辨識失敗:' + e.message + '(可能是網路無法下載語言模型,請稍後再試)', true);
+  }
+  runBtn.disabled = false;
+});
+
+function statusLabel(status) {
+  const map = {
+    'loading tesseract core': '載入核心模組中...',
+    'initializing tesseract': '初始化中...',
+    'loading language traineddata': '下載語言模型中...',
+    'initializing api': '初始化中...',
+  };
+  return map[status] || status;
+}
+
+document.getElementById('copyOutput').addEventListener('click', (e) => copyText(outputArea.value, e.target));
+document.getElementById('downloadOutput').addEventListener('click', () => downloadText(currentName + '.txt', outputArea.value));
+</script>
+</body>
+</html>
