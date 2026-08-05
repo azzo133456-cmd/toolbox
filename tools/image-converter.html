@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片格式轉換 / 壓縮 | 小工具箱</title>
+<meta name="description" content="免費線上圖片格式轉換與壓縮工具,支援 PNG / JPG / WebP 互相轉換,可調整壓縮品質,批次處理多張圖片。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  .thumb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:0.8rem; margin:1rem 0; }
+  .thumb-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.6rem; text-align:center; font-size:0.78rem; }
+  .thumb-card img { max-width:100%; max-height:100px; border-radius:6px; margin-bottom:0.4rem; background:#fff; }
+  .thumb-card .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-muted); }
+  .thumb-card .size { color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片格式轉換 / 壓縮</div>
+  <h1 class="page-title">圖片格式轉換 / 壓縮</h1>
+  <p class="page-desc">上傳圖片,轉換成 PNG、JPG 或 WebP,並可調整壓縮品質縮小檔案大小。可一次處理多張圖片。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+    <span class="dropzone-hint">或把圖片拖曳到這裡(可多選)</span>
+  </div>
+
+  <div class="controls-row">
+    <label>輸出格式
+      <select id="formatSelect">
+        <option value="image/jpeg">JPG</option>
+        <option value="image/webp">WebP</option>
+        <option value="image/png">PNG</option>
+      </select>
+    </label>
+    <label id="qualityWrap">品質
+      <input type="range" id="qualityInput" min="0.1" max="1" step="0.05" value="0.8">
+      <span id="qualityVal">80%</span>
+    </label>
+    <button class="btn btn-primary" id="convertBtn" disabled>轉換</button>
+    <button class="btn" id="downloadAllBtn" disabled>下載全部</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="thumb-grid" id="thumbGrid"></div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>PNG 格式不支援品質參數(無損),品質滑桿只影響 JPG 與 WebP。轉換後單張圖片可個別下載,多張則按「下載全部」打包成 zip。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const formatSelect = document.getElementById('formatSelect');
+const qualityWrap = document.getElementById('qualityWrap');
+const qualityInput = document.getElementById('qualityInput');
+const qualityVal = document.getElementById('qualityVal');
+const convertBtn = document.getElementById('convertBtn');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+const statusMsg = document.getElementById('statusMsg');
+const thumbGrid = document.getElementById('thumbGrid');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let sourceFiles = [];
+let results = []; // { name, blob, url }
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function extFor(mime) {
+  return { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png' }[mime];
+}
+
+fileInput.addEventListener('change', () => {
+  sourceFiles = Array.from(fileInput.files).filter(f => f.type.startsWith('image/'));
+  convertBtn.disabled = sourceFiles.length === 0;
+  downloadAllBtn.disabled = true;
+  results = [];
+  thumbGrid.innerHTML = '';
+  setStatus(statusMsg, sourceFiles.length ? `已選擇 ${sourceFiles.length} 張圖片` : '');
+});
+
+qualityInput.addEventListener('input', () => { qualityVal.textContent = Math.round(qualityInput.value * 100) + '%'; });
+formatSelect.addEventListener('change', () => { qualityWrap.style.display = formatSelect.value === 'image/png' ? 'none' : 'flex'; });
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, type === 'image/png' ? undefined : quality));
+}
+
+convertBtn.addEventListener('click', async () => {
+  convertBtn.disabled = true;
+  thumbGrid.innerHTML = '';
+  results = [];
+  const targetType = formatSelect.value;
+  const quality = Number(qualityInput.value);
+  try {
+    for (let i = 0; i < sourceFiles.length; i++) {
+      const file = sourceFiles[i];
+      setStatus(statusMsg, `轉換中... (${i + 1}/${sourceFiles.length})`);
+      const img = await loadImage(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (targetType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      ctx.drawImage(img, 0, 0);
+      const blob = await canvasToBlob(canvas, targetType, quality);
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const name = `${baseName}.${extFor(targetType)}`;
+      const url = URL.createObjectURL(blob);
+      results.push({ name, blob, url, originalSize: file.size });
+
+      const card = document.createElement('div');
+      card.className = 'thumb-card';
+      card.innerHTML = `
+        <img src="${url}" alt="${name}">
+        <div class="name">${name}</div>
+        <div class="size">${fmtSize(blob.size)}<span style="color:var(--text-muted);font-weight:400;"> (原 ${fmtSize(file.size)})</span></div>
+        <button class="btn" style="margin-top:0.4rem;width:100%;">下載</button>
+      `;
+      card.querySelector('button').addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+      thumbGrid.appendChild(card);
+    }
+    const totalBefore = results.reduce((s, r) => s + r.originalSize, 0);
+    const totalAfter = results.reduce((s, r) => s + r.blob.size, 0);
+    const pct = totalBefore ? Math.round((1 - totalAfter / totalBefore) * 100) : 0;
+    setStatus(statusMsg, `完成:共 ${results.length} 張,總大小從 ${fmtSize(totalBefore)} 變成 ${fmtSize(totalAfter)}${pct > 0 ? `(縮小 ${pct}%)` : ''}`);
+    downloadAllBtn.disabled = results.length === 0;
+  } catch (e) {
+    setStatus(statusMsg, '轉換失敗:' + e.message, true);
+  }
+  convertBtn.disabled = false;
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+  if (results.length === 1) {
+    const a = document.createElement('a');
+    a.href = results[0].url; a.download = results[0].name;
+    document.body.appendChild(a); a.click(); a.remove();
+    return;
+  }
+  const zip = new JSZip();
+  results.forEach(r => zip.file(r.name, r.blob));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'converted-images.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+
+qualityWrap.style.display = formatSelect.value === 'image/png' ? 'none' : 'flex';
+</script>
+</body>
+</html>

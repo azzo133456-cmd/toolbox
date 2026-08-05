@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片轉 Base64 | 小工具箱</title>
+<meta name="description" content="免費線上圖片轉 Base64 工具,把圖片轉成 Base64 字串或 Data URI,也支援反向把 Base64 還原成圖片下載。">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片轉 Base64</div>
+  <h1 class="page-title">圖片轉 Base64</h1>
+  <p class="page-desc">把圖片轉成 Base64 字串或 Data URI,方便嵌入 CSS / HTML / 程式碼;也支援貼上 Base64 還原成圖片下載。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="controls-row">
+    <label><input type="radio" name="mode" value="encode" checked> 圖片 → Base64</label>
+    <label><input type="radio" name="mode" value="decode"> Base64 → 圖片</label>
+  </div>
+
+  <!-- encode -->
+  <div id="encodePanel">
+    <div class="dropzone" id="dropzone">
+      <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+      <input type="file" id="fileInput" accept="image/*" style="display:none;">
+      <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+      <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+    </div>
+    <div id="encodeResultWrap" style="display:none;">
+      <div style="text-align:center;margin:1rem 0;">
+        <img id="encodePreview" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);">
+      </div>
+      <div class="controls-row">
+        <label><input type="radio" name="outputMode" value="datauri" checked> Data URI(含 data:image/... 前綴)</label>
+        <label><input type="radio" name="outputMode" value="raw"> 純 Base64 字串</label>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span>結果</span><div class="actions"><button class="btn" id="copyBase64">複製</button></div></div>
+        <pre id="base64Output" style="max-height:200px;overflow:auto;word-break:break-all;"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- decode -->
+  <div id="decodePanel" style="display:none;">
+    <div class="panel">
+      <div class="panel-header"><span>貼上 Base64 或 Data URI</span><div class="actions"><button class="btn" id="clearDecodeInput">清空</button></div></div>
+      <textarea id="decodeInput" placeholder="貼上 Base64 字串,例如 data:image/png;base64,iVBORw0KG... 或純 Base64 內容" style="min-height:160px;"></textarea>
+    </div>
+    <div class="controls-row">
+      <label>若貼的是純 Base64,指定格式
+        <select id="decodeFormat">
+          <option value="image/png">PNG</option>
+          <option value="image/jpeg">JPEG</option>
+          <option value="image/webp">WebP</option>
+          <option value="image/gif">GIF</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" id="decodeBtn">預覽並準備下載</button>
+    </div>
+    <div class="status-msg" id="decodeStatus"></div>
+    <div id="decodeResultWrap" style="display:none;text-align:center;">
+      <img id="decodePreview" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid var(--border);margin:1rem 0;">
+      <div><button class="btn btn-primary" id="downloadDecodedBtn">下載圖片</button></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「Data URI」可以直接貼到 CSS 的 <code>background-image:url(...)</code> 或 HTML 的 <code>&lt;img src="..."&gt;</code>;「純 Base64」則是拿掉前綴的原始編碼內容。還原時如果貼的是完整 Data URI,系統會自動偵測格式;若只有純字串,需要手動選擇格式。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+// ---- mode switch ----
+const encodePanel = document.getElementById('encodePanel');
+const decodePanel = document.getElementById('decodePanel');
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  encodePanel.style.display = mode === 'encode' ? 'block' : 'none';
+  decodePanel.style.display = mode === 'decode' ? 'block' : 'none';
+}));
+
+// ---- encode ----
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const encodeResultWrap = document.getElementById('encodeResultWrap');
+const encodePreview = document.getElementById('encodePreview');
+const base64Output = document.getElementById('base64Output');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let fullDataUri = '';
+
+function renderEncodeOutput() {
+  const outputMode = document.querySelector('input[name="outputMode"]:checked').value;
+  if (outputMode === 'datauri') base64Output.textContent = fullDataUri;
+  else base64Output.textContent = fullDataUri.split(',')[1] || '';
+}
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    fullDataUri = reader.result;
+    encodePreview.src = fullDataUri;
+    fileInfo.textContent = `已載入:${f.name}(${(f.size / 1024).toFixed(1)} KB)`;
+    encodeResultWrap.style.display = 'block';
+    renderEncodeOutput();
+  };
+  reader.readAsDataURL(f);
+});
+
+document.querySelectorAll('input[name="outputMode"]').forEach(r => r.addEventListener('change', renderEncodeOutput));
+document.getElementById('copyBase64').addEventListener('click', (e) => copyText(base64Output.textContent, e.target));
+
+// ---- decode ----
+const decodeInput = document.getElementById('decodeInput');
+const decodeFormat = document.getElementById('decodeFormat');
+const decodeBtn = document.getElementById('decodeBtn');
+const decodeStatus = document.getElementById('decodeStatus');
+const decodeResultWrap = document.getElementById('decodeResultWrap');
+const decodePreview = document.getElementById('decodePreview');
+const downloadDecodedBtn = document.getElementById('downloadDecodedBtn');
+let decodedDataUri = '';
+
+decodeBtn.addEventListener('click', () => {
+  let raw = decodeInput.value.trim();
+  if (!raw) { setStatus(decodeStatus, '請貼上 Base64 內容', true); return; }
+  let dataUri;
+  if (raw.startsWith('data:')) {
+    dataUri = raw;
+  } else {
+    raw = raw.replace(/\s+/g, '');
+    dataUri = `data:${decodeFormat.value};base64,${raw}`;
+  }
+  const img = new Image();
+  img.onload = () => {
+    decodedDataUri = dataUri;
+    decodePreview.src = dataUri;
+    decodeResultWrap.style.display = 'block';
+    setStatus(decodeStatus, `還原成功:${img.naturalWidth}×${img.naturalHeight}px`);
+  };
+  img.onerror = () => {
+    decodeResultWrap.style.display = 'none';
+    setStatus(decodeStatus, '還原失敗:內容不是合法的圖片 Base64', true);
+  };
+  img.src = dataUri;
+});
+
+document.getElementById('clearDecodeInput').addEventListener('click', () => { decodeInput.value = ''; setStatus(decodeStatus, ''); decodeResultWrap.style.display = 'none'; });
+
+downloadDecodedBtn.addEventListener('click', () => {
+  const mime = decodedDataUri.match(/^data:([^;]+);/);
+  const ext = mime ? mime[1].split('/')[1] : 'png';
+  const a = document.createElement('a');
+  a.href = decodedDataUri; a.download = `decoded.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
+</script>
+</body>
+</html>

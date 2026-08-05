@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片尺寸調整 / 裁切 | 小工具箱</title>
+<meta name="description" content="免費線上圖片尺寸調整與裁切工具,可依寬高或百分比縮放,或裁切成指定範圍,支援下載成 PNG/JPG。">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  #previewWrap { position:relative; display:inline-block; max-width:100%; }
+  #previewImg { display:block; max-width:100%; max-height:420px; }
+  #cropBox { position:absolute; border:2px dashed var(--accent); background:rgba(79,70,229,0.12); cursor:move; }
+  .num-input { width:90px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 圖片尺寸調整 / 裁切</div>
+  <h1 class="page-title">圖片尺寸調整 / 裁切</h1>
+  <p class="page-desc">上傳圖片,依寬高或百分比縮放,或拖曳裁切框裁切成指定範圍,下載結果。全部在瀏覽器端處理,檔案不會上傳到伺服器。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇圖片</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <span id="fileInfo" style="font-size:0.85rem;color:var(--text-muted);"></span>
+    <span class="dropzone-hint">或把圖片拖曳到這裡</span>
+  </div>
+
+  <div id="workArea" style="display:none;">
+    <div class="controls-row">
+      <label><input type="radio" name="mode" value="resize" checked> 調整尺寸</label>
+      <label><input type="radio" name="mode" value="crop"> 裁切</label>
+    </div>
+
+    <div id="resizeControls" class="controls-row">
+      <label>寬 <input type="number" id="widthInput" class="num-input"></label>
+      <label>高 <input type="number" id="heightInput" class="num-input"></label>
+      <label><input type="checkbox" id="lockRatioChk" checked> 鎖定比例</label>
+      <label>或百分比 <input type="number" id="percentInput" class="num-input" placeholder="例如 50" min="1" max="500"> %</label>
+      <button class="btn" id="applyPercentBtn">套用百分比</button>
+    </div>
+
+    <div id="cropControls" class="controls-row" style="display:none;">
+      <span style="font-size:0.85rem;color:var(--text-muted);">拖曳下方裁切框調整範圍,或直接輸入數值</span>
+      <label>X <input type="number" id="cropXInput" class="num-input"></label>
+      <label>Y <input type="number" id="cropYInput" class="num-input"></label>
+      <label>寬 <input type="number" id="cropWInput" class="num-input"></label>
+      <label>高 <input type="number" id="cropHInput" class="num-input"></label>
+      <button class="btn" id="squareCropBtn">置中裁切成正方形</button>
+    </div>
+
+    <div id="previewWrap">
+      <img id="previewImg" alt="預覽">
+      <div id="cropBox"></div>
+    </div>
+
+    <div class="controls-row">
+      <label>輸出格式
+        <select id="outFormat">
+          <option value="image/png">PNG</option>
+          <option value="image/jpeg">JPG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" id="applyBtn">套用並下載</button>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>「調整尺寸」會縮放整張圖片;「裁切」會擷取圖片中的一個矩形範圍。裁切框可以直接拖曳移動與調整右下角大小,也可以用數字輸入精確設定。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const workArea = document.getElementById('workArea');
+const previewImg = document.getElementById('previewImg');
+const previewWrap = document.getElementById('previewWrap');
+const cropBox = document.getElementById('cropBox');
+const widthInput = document.getElementById('widthInput');
+const heightInput = document.getElementById('heightInput');
+const lockRatioChk = document.getElementById('lockRatioChk');
+const percentInput = document.getElementById('percentInput');
+const resizeControls = document.getElementById('resizeControls');
+const cropControls = document.getElementById('cropControls');
+const cropXInput = document.getElementById('cropXInput');
+const cropYInput = document.getElementById('cropYInput');
+const cropWInput = document.getElementById('cropWInput');
+const cropHInput = document.getElementById('cropHInput');
+const outFormat = document.getElementById('outFormat');
+const applyBtn = document.getElementById('applyBtn');
+const statusMsg = document.getElementById('statusMsg');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+let img = null;
+let naturalW = 0, naturalH = 0;
+let currentFile = null;
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = URL.createObjectURL(file);
+  });
+}
+
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  currentFile = f;
+  try {
+    img = await loadImage(f);
+    naturalW = img.naturalWidth; naturalH = img.naturalHeight;
+    previewImg.src = img.src;
+    fileInfo.textContent = `已載入:${f.name}(${naturalW}×${naturalH}px)`;
+    widthInput.value = naturalW;
+    heightInput.value = naturalH;
+    workArea.style.display = 'block';
+    setStatus(statusMsg, '');
+    // init crop box to full image after layout settles
+    requestAnimationFrame(initCropBox);
+  } catch (e) {
+    setStatus(statusMsg, '讀取圖片失敗', true);
+  }
+});
+
+// ---- resize controls ----
+let lastEdited = 'width';
+widthInput.addEventListener('input', () => {
+  lastEdited = 'width';
+  if (lockRatioChk.checked && naturalW) {
+    heightInput.value = Math.round(widthInput.value * (naturalH / naturalW));
+  }
+});
+heightInput.addEventListener('input', () => {
+  lastEdited = 'height';
+  if (lockRatioChk.checked && naturalH) {
+    widthInput.value = Math.round(heightInput.value * (naturalW / naturalH));
+  }
+});
+document.getElementById('applyPercentBtn').addEventListener('click', () => {
+  const p = Number(percentInput.value);
+  if (!p) return;
+  widthInput.value = Math.round(naturalW * p / 100);
+  heightInput.value = Math.round(naturalH * p / 100);
+});
+
+// ---- mode switch ----
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  resizeControls.style.display = mode === 'resize' ? 'flex' : 'none';
+  cropControls.style.display = mode === 'crop' ? 'flex' : 'none';
+  cropBox.style.display = mode === 'crop' ? 'block' : 'none';
+}));
+
+// ---- crop box (drag to move, handle to resize) ----
+let cropRect = { x: 0, y: 0, w: 0, h: 0 }; // in natural image pixels
+
+function displayScale() {
+  return previewImg.clientWidth / naturalW;
+}
+
+function initCropBox() {
+  cropRect = { x: Math.round(naturalW * 0.1), y: Math.round(naturalH * 0.1), w: Math.round(naturalW * 0.8), h: Math.round(naturalH * 0.8) };
+  syncCropInputs();
+  renderCropBox();
+}
+
+function renderCropBox() {
+  const s = displayScale();
+  cropBox.style.left = (cropRect.x * s) + 'px';
+  cropBox.style.top = (cropRect.y * s) + 'px';
+  cropBox.style.width = (cropRect.w * s) + 'px';
+  cropBox.style.height = (cropRect.h * s) + 'px';
+}
+
+function syncCropInputs() {
+  cropXInput.value = cropRect.x;
+  cropYInput.value = cropRect.y;
+  cropWInput.value = cropRect.w;
+  cropHInput.value = cropRect.h;
+}
+
+[cropXInput, cropYInput, cropWInput, cropHInput].forEach(inp => inp.addEventListener('input', () => {
+  cropRect = {
+    x: Number(cropXInput.value) || 0,
+    y: Number(cropYInput.value) || 0,
+    w: Number(cropWInput.value) || 1,
+    h: Number(cropHInput.value) || 1,
+  };
+  renderCropBox();
+}));
+
+document.getElementById('squareCropBtn').addEventListener('click', () => {
+  const side = Math.min(naturalW, naturalH);
+  cropRect = { x: Math.round((naturalW - side) / 2), y: Math.round((naturalH - side) / 2), w: side, h: side };
+  syncCropInputs();
+  renderCropBox();
+});
+
+let dragMode = null, dragStart = null, rectStart = null;
+cropBox.addEventListener('mousedown', (e) => {
+  dragMode = (e.offsetX > cropBox.clientWidth - 14 && e.offsetY > cropBox.clientHeight - 14) ? 'resize' : 'move';
+  dragStart = { x: e.clientX, y: e.clientY };
+  rectStart = { ...cropRect };
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragMode) return;
+  const s = displayScale();
+  const dx = (e.clientX - dragStart.x) / s;
+  const dy = (e.clientY - dragStart.y) / s;
+  if (dragMode === 'move') {
+    cropRect.x = Math.max(0, Math.min(naturalW - cropRect.w, rectStart.x + dx));
+    cropRect.y = Math.max(0, Math.min(naturalH - cropRect.h, rectStart.y + dy));
+  } else {
+    cropRect.w = Math.max(10, Math.min(naturalW - cropRect.x, rectStart.w + dx));
+    cropRect.h = Math.max(10, Math.min(naturalH - cropRect.y, rectStart.h + dy));
+  }
+  cropRect.x = Math.round(cropRect.x); cropRect.y = Math.round(cropRect.y);
+  cropRect.w = Math.round(cropRect.w); cropRect.h = Math.round(cropRect.h);
+  syncCropInputs();
+  renderCropBox();
+});
+window.addEventListener('mouseup', () => { dragMode = null; });
+window.addEventListener('resize', () => { if (img) renderCropBox(); });
+
+// ---- apply ----
+function canvasToBlob(canvas, type) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, 0.92));
+}
+
+applyBtn.addEventListener('click', async () => {
+  if (!img) return;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const type = outFormat.value;
+
+  if (mode === 'resize') {
+    const w = Math.max(1, Number(widthInput.value) || naturalW);
+    const h = Math.max(1, Number(heightInput.value) || naturalH);
+    canvas.width = w; canvas.height = h;
+    if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(img, 0, 0, w, h);
+  } else {
+    const { x, y, w, h } = cropRect;
+    canvas.width = w; canvas.height = h;
+    if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+  }
+
+  try {
+    const blob = await canvasToBlob(canvas, type);
+    const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[type];
+    const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${baseName}-${mode === 'resize' ? 'resized' : 'cropped'}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    setStatus(statusMsg, `完成:輸出 ${canvas.width}×${canvas.height}px`);
+  } catch (e) {
+    setStatus(statusMsg, '處理失敗:' + e.message, true);
+  }
+});
+</script>
+</body>
+</html>

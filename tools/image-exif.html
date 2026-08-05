@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>照片 EXIF 資訊檢視 | 小工具箱</title>
+<meta name="description" content="免費線上照片 EXIF 資訊檢視工具,讀取相機型號、拍攝時間、光圈快門 ISO、GPS 座標等中繼資料。">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="logo-mark">🧰</span> 小工具箱</a>
+    <nav class="main-nav">
+      <a href="../index.html#converters">格式轉換</a>
+      <a href="../index.html#images">圖片工具</a>
+      <a href="../index.html#pdf">PDF 工具</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / 照片 EXIF 資訊檢視</div>
+  <h1 class="page-title">照片 EXIF 資訊檢視</h1>
+  <p class="page-desc">上傳照片(通常是相機或手機拍的 JPEG),讀取拍攝時的相機型號、時間、光圈快門 ISO、GPS 座標等中繼資料。全部在瀏覽器端處理,照片不會上傳到伺服器,適合在分享照片前檢查並移除隱私資訊。</p>
+
+  <div class="dropzone" id="dropzone">
+    <button class="btn btn-primary" id="chooseBtn">選擇照片</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <span class="dropzone-hint">或把照片拖曳到這裡</span>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+
+  <div class="workspace" id="resultWrap" style="display:none;">
+    <div class="panel">
+      <div class="panel-header"><span>預覽</span></div>
+      <div style="padding:1rem;text-align:center;">
+        <img id="previewImg" style="max-width:100%;max-height:360px;border-radius:8px;">
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span>EXIF 資訊</span></div>
+      <div style="padding:0.5rem;max-height:400px;overflow:auto;">
+        <table id="exifTable" style="width:100%;border-collapse:collapse;font-size:0.85rem;"></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <h4>使用說明</h4>
+    <p>EXIF 資訊只存在於部分 JPEG 檔案中(多半是相機或手機直出的原始檔),經過通訊軟體壓縮或截圖轉存的圖片通常已經被移除 EXIF。若含有 GPS 座標,會提供 Google 地圖連結。</p>
+  </div>
+</main>
+
+<footer>
+  <p>© <span id="year"></span> 小工具箱・所有工具皆在瀏覽器端執行,不上傳任何資料</p>
+</footer>
+
+<script src="../js/main.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const chooseBtn = document.getElementById('chooseBtn');
+const fileInput = document.getElementById('fileInput');
+const statusMsg = document.getElementById('statusMsg');
+const resultWrap = document.getElementById('resultWrap');
+const previewImg = document.getElementById('previewImg');
+const exifTable = document.getElementById('exifTable');
+
+setupDropzone(document.getElementById('dropzone'), fileInput);
+chooseBtn.addEventListener('click', () => fileInput.click());
+
+const LABELS = {
+  Make: '相機廠牌', Model: '相機型號', LensModel: '鏡頭型號',
+  DateTimeOriginal: '拍攝時間', DateTime: '檔案時間',
+  ExposureTime: '快門速度', FNumber: '光圈值', ISOSpeedRatings: 'ISO',
+  FocalLength: '焦距', Flash: '閃光燈', WhiteBalance: '白平衡',
+  PixelXDimension: '像素寬', PixelYDimension: '像素高',
+  Orientation: '方向', Software: '軟體', ExposureProgram: '曝光模式',
+  MeteringMode: '測光模式', ExposureBiasValue: '曝光補償',
+};
+
+function fmtValue(key, val) {
+  if (val && val.numerator !== undefined) return `${val.numerator}/${val.denominator}`;
+  if (key === 'ExposureTime' && typeof val === 'number') return val < 1 ? `1/${Math.round(1 / val)} 秒` : `${val} 秒`;
+  return String(val);
+}
+
+function addRow(label, value) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;">${label}</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);word-break:break-all;">${value}</td>`;
+  exifTable.appendChild(tr);
+}
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  setStatus(statusMsg, '讀取中...');
+  const reader = new FileReader();
+  reader.onload = () => {
+    previewImg.src = reader.result;
+    resultWrap.style.display = 'grid';
+    exifTable.innerHTML = '';
+    EXIF.getData(f, function () {
+      const allTags = EXIF.getAllTags(this);
+      const keys = Object.keys(LABELS).filter(k => allTags[k] !== undefined);
+      const lat = EXIF.getTag(this, 'GPSLatitude');
+      const lon = EXIF.getTag(this, 'GPSLongitude');
+      const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+      const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+
+      if (!keys.length && !lat) {
+        addRow('狀態', '這張照片沒有偵測到 EXIF 資訊');
+        setStatus(statusMsg, '完成:無 EXIF 資訊');
+        return;
+      }
+
+      keys.forEach(k => addRow(LABELS[k], fmtValue(k, allTags[k])));
+
+      if (lat && lon) {
+        const toDeg = (arr, ref) => {
+          const d = arr[0].numerator / arr[0].denominator;
+          const m = arr[1].numerator / arr[1].denominator;
+          const s = arr[2].numerator / arr[2].denominator;
+          let dec = d + m / 60 + s / 3600;
+          if (ref === 'S' || ref === 'W') dec = -dec;
+          return dec;
+        };
+        const latDec = toDeg(lat, latRef);
+        const lonDec = toDeg(lon, lonRef);
+        addRow('GPS 座標', `${latDec.toFixed(6)}, ${lonDec.toFixed(6)} <a href="https://www.google.com/maps?q=${latDec},${lonDec}" target="_blank" rel="noopener noreferrer">在 Google 地圖開啟</a>`);
+      }
+
+      setStatus(statusMsg, `完成:共 ${keys.length + (lat ? 1 : 0)} 項資訊`);
+    });
+  };
+  reader.readAsDataURL(f);
+});
+</script>
+</body>
+</html>
