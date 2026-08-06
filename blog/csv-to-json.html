@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>如何免費把 CSV 轉成 JSON?3 步驟線上教學 | 小工具箱</title>
-<meta name="description" content="不用寫程式,3 步驟把 CSV 表格轉成 JSON 格式,資料全程在瀏覽器處理不上傳伺服器,適合工程師測試資料或串接 API 使用。">
+<title>CSV 轉 JSON 免安裝教學:3 種情境、常見錯誤與免費工具 | 小工具箱</title>
+<meta name="description" content="不用寫程式、不用裝套件,3 步驟把 CSV 轉成 JSON。整理工程師、前端、資料處理最常遇到的 3 種情境與常見踩雷點,資料全程在瀏覽器處理不上傳伺服器。">
 <link rel="stylesheet" href="../css/style.css">
 <script type="application/ld+json">
 {
@@ -12,8 +12,8 @@
   "@graph": [
     {
       "@type": "BlogPosting",
-      "headline": "如何免費把 CSV 轉成 JSON?3 步驟線上教學",
-      "description": "不用寫程式,3 步驟把 CSV 表格轉成 JSON 格式,資料全程在瀏覽器處理不上傳伺服器,適合工程師測試資料或串接 API 使用。",
+      "headline": "CSV 轉 JSON 免安裝教學:3 種情境、常見錯誤與免費工具",
+      "description": "不用寫程式、不用裝套件,3 步驟把 CSV 轉成 JSON。整理工程師、前端、資料處理最常遇到的 3 種情境與常見踩雷點,資料全程在瀏覽器處理不上傳伺服器。",
       "datePublished": "2026-08-06",
       "url": "https://toolboxspot.com/blog/csv-to-json.html",
       "inLanguage": "zh-Hant",
@@ -40,7 +40,7 @@
         {
           "@type": "ListItem",
           "position": 3,
-          "name": "如何免費把 CSV 轉成 JSON?3 步驟線上教學",
+          "name": "CSV 轉 JSON 免安裝教學:3 種情境、常見錯誤與免費工具",
           "item": "https://toolboxspot.com/blog/csv-to-json.html"
         }
       ]
@@ -64,34 +64,49 @@
 </header>
 
 <main>
-  <div class="breadcrumb"><a href="../index.html">首頁</a> / <a href="../blog/index.html">文章</a> / 如何免費把 CSV 轉成 JSON?3 步驟線上教學</div>
-  <h1 class="page-title">如何免費把 CSV 轉成 JSON?3 步驟線上教學</h1>
+  <div class="breadcrumb"><a href="../index.html">首頁</a> / <a href="../blog/index.html">文章</a> / CSV 轉 JSON 免安裝教學:3 種情境、常見錯誤與免費工具</div>
+  <h1 class="page-title">CSV 轉 JSON 免安裝教學:3 種情境、常見錯誤與免費工具</h1>
   <p class="article-meta">發布日期:2026-08-06</p>
   <div class="article-body">
-<p>工程師串接 API、寫測試資料時,常常需要把 Excel 或 CSV 表格轉成 JSON 格式。這篇教你不用寫程式,3 步驟在瀏覽器完成轉換。</p>
-<h2>步驟 1:準備 CSV 內容</h2>
-<p>從 Excel 或 Google Sheets 複製表格內容(含標題列),或是直接準備一個 <code>.csv</code> 檔案。例如:</p>
+<p>很多人一聽到「格式轉換」就以為要寫 Python 或裝套件(<code>csvtojson</code>、<code>pandas</code>...),其實多數情況下你只是想把手上的表格丟進程式測試,或貼給前端當假資料——這種一次性的轉換,根本不需要寫程式,3 步驟就能在瀏覽器完成。</p>
+<h2>你可能遇到這 3 種情境</h2>
+<p><strong>情境 1:工程師準備測試資料</strong>
+API 開發到一半,需要一批假資料丟進資料庫測試,手上只有 Excel 匯出的 CSV,懶得為了一次性任務寫轉換腳本。</p>
+<p><strong>情境 2:前端要 mock API 回應</strong>
+後端還沒好,前端想先用假資料串接畫面,拿到的規格是一份 CSV 表格,需要轉成 <code>.json</code> 檔案放進專案。</p>
+<p><strong>情境 3:資料處理與交換</strong>
+跟其他系統對接,對方只吃 JSON 格式,但你手邊的原始資料是 Excel/CSV 報表。</p>
+<p>不管哪一種,流程都一樣。</p>
+<h2>3 步驟轉換</h2>
+<h3>步驟 1:準備 CSV 內容</h3>
+<p>從 Excel 或 Google Sheets 複製表格內容(記得連標題列一起複製),或準備一個 <code>.csv</code> 檔案內容,例如:</p>
 <pre><code>姓名,年齡,城市
 小明,25,台北
 小華,30,高雄
 </code></pre>
-<h2>步驟 2:貼上並轉換</h2>
-<p>打開<a href="../tools/table-converter.html">表格格式轉換工具</a>,把 CSV 內容貼到輸入框,來源格式選擇 CSV,目標格式選擇 JSON,工具會即時轉換,不需要上傳檔案、不需要註冊帳號。</p>
+<h3>步驟 2:貼上並選擇格式</h3>
+<p>打開<a href="../tools/table-converter.html">表格格式轉換工具</a>,把內容貼到輸入框,來源格式選 CSV、目標格式選 JSON,右側會即時顯示結果——不用按送出、不用上傳檔案、也不用註冊帳號。</p>
 <p>轉換後會得到:</p>
 <pre><code class="language-json">[
   { &quot;姓名&quot;: &quot;小明&quot;, &quot;年齡&quot;: &quot;25&quot;, &quot;城市&quot;: &quot;台北&quot; },
   { &quot;姓名&quot;: &quot;小華&quot;, &quot;年齡&quot;: &quot;30&quot;, &quot;城市&quot;: &quot;高雄&quot; }
 ]
 </code></pre>
-<h2>步驟 3:驗證與美化 JSON</h2>
-<p>如果拿到的 JSON 是別人給的、或想確認格式是否正確,可以貼到 <a href="../tools/json-formatter.html">JSON 格式化工具</a>,它會自動美化排版、標出錯誤位置,方便除錯。</p>
+<h3>步驟 3(選用):驗證格式是否正確</h3>
+<p>如果 JSON 是別人給你的、或你想確認語法有沒有問題,貼到 <a href="../tools/json-formatter.html">JSON 格式化工具</a>,它會自動美化排版並標出錯誤位置,比肉眼找漏掉的逗號快很多。</p>
+<h2>常見踩雷點</h2>
+<ul>
+<li><strong>欄位裡有逗號</strong>:如果儲存格內容本身包含逗號(例如地址「台北市, 大安區」),記得用雙引號包住該欄位,例如 <code>&quot;台北市, 大安區&quot;</code>,否則會被誤判成多一欄</li>
+<li><strong>中文亂碼</strong>:如果原始檔案是從舊版 Excel 存成 CSV,編碼可能是 Big5 而非 UTF-8,貼上前建議用文字編輯器另存成 UTF-8 編碼</li>
+<li><strong>標題列缺漏</strong>:少了標題列,轉出來的 JSON 欄位名稱會變成 <code>col1</code>、<code>col2</code> 這種預設值,記得確認第一行是欄位名稱</li>
+</ul>
 <h2>常見問題</h2>
 <p><strong>Q:資料會不會被上傳到伺服器?</strong>
-不會。這個網站的所有工具都在瀏覽器本機執行 JavaScript 完成轉換,資料不會傳到任何後端伺服器。</p>
-<p><strong>Q:CSV 裡面有中文或逗號會出錯嗎?</strong>
-工具有處理常見的雙引號包覆欄位(例如欄位內容包含逗號時會自動用 <code>&quot;...&quot;</code> 包住),多數情況可以正常解析。</p>
+不會。這個網站的所有工具都在瀏覽器本機用 JavaScript 執行轉換,資料不會離開你的裝置,也不會被記錄。</p>
 <p><strong>Q:可以反過來把 JSON 轉成 CSV 嗎?</strong>
-可以,同一個<a href="../tools/table-converter.html">表格格式轉換工具</a>支援 CSV、TSV、JSON、Markdown、HTML 表格互相轉換,來源跟目標格式都可以自由切換。</p>
+可以,同一個<a href="../tools/table-converter.html">表格格式轉換工具</a>支援 CSV、TSV、JSON、Markdown、HTML 表格互相轉換,來源跟目標格式都能自由切換。</p>
+<p><strong>Q:資料量很大(上千列)會卡住嗎?</strong>
+工具在瀏覽器記憶體內處理,一般報表等級(數千列)沒問題;如果是數十萬列的大型檔案,建議還是用程式腳本處理較穩定。</p>
   </div>
 </main>
 
